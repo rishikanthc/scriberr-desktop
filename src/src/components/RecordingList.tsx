@@ -145,7 +145,7 @@ export function RecordingList({ onSelect }: RecordingListProps) {
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent flex flex-col gap-1">
+            <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1">
                 {recordings.length === 0 && !loading && (
                     <div className="text-center py-8 text-white/30 text-xs">No recordings found</div>
                 )}

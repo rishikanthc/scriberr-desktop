@@ -47,9 +47,16 @@ export function RecordingList({ onSelect }: RecordingListProps) {
     const handleContextMenu = (e: React.MouseEvent, id: string) => {
         e.preventDefault();
         e.stopPropagation();
-        // Adjust coordinates if near edges (simple clamp for now or just render)
-        // Since window is small, let's just use client coordinates.
-        setContextMenu({ x: e.clientX, y: e.clientY, id });
+
+        // Intelligent positioning to keep within window bounds
+        const MENU_WIDTH = 130;
+        const MENU_HEIGHT = 50;
+        const PADDING = 10;
+
+        const x = Math.min(e.clientX, window.innerWidth - MENU_WIDTH - PADDING);
+        const y = Math.min(e.clientY, window.innerHeight - MENU_HEIGHT - PADDING);
+
+        setContextMenu({ x, y, id });
     };
 
     const handleDeleteClick = (e: React.MouseEvent) => {

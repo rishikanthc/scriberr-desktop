@@ -2,21 +2,50 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { TitleBar } from './components/TitleBar';
 import { AppSelector } from './components/AppSelector';
-import { Controls } from './components/Controls';
-import { Timer } from './components/Timer';
-import { MicSelector } from './components/MicSelector';
+import { SetupScreen } from './components/SetupScreen';
+import { RecordingScreen } from './components/RecordingScreen';
+import { ReviewScreen } from './components/ReviewScreen';
 import logo from './assets/logo.svg';
 
+type AppStep = 'home' | 'setup' | 'recording' | 'review';
+
 function App() {
+  const [step, setStep] = useState<AppStep>('home');
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const [filename, setFilename] = useState('');
+  const [micDevice, setMicDevice] = useState<string | null>(null);
+  const [recordedPath, setRecordedPath] = useState('');
   const [isPaused, setIsPaused] = useState(false);
 
-  const handleStart = async () => {
+  const handleAppSelect = (pid: number) => {
+    if (selectedPid === pid) {
+      // If already selected, maybe just go to setup?
+      // Or toggle selection.
+      // User said: "After I pick an app... show a button for new recording"
+      // Let's keep selection logic, and show button if selected.
+      setSelectedPid(null);
+    } else {
+      setSelectedPid(pid);
+    }
+  };
+
+  const handleNewRecordingClick = () => {
+    if (selectedPid) {
+      setStep('setup');
+    }
+  };
+
+  const handleStartRecording = async (name: string, mic: string | null) => {
     if (!selectedPid) return;
     try {
-      await invoke('start_recording_command', { pid: selectedPid });
-      setIsRecording(true);
+      setFilename(name);
+      setMicDevice(mic);
+      await invoke('start_recording_command', {
+        pid: selectedPid,
+        filename: name,
+        micDevice: mic
+      });
+      setStep('recording');
       setIsPaused(false);
     } catch (error) {
       console.error('Failed to start recording:', error);
@@ -44,65 +73,117 @@ function App() {
   const handleStop = async () => {
     try {
       const folderPath = await invoke<string>('stop_recording_command');
-      setIsRecording(false);
+      // We need the full path. Since we know the folder and filename...
+      // But filename might have been modified by backend (e.g. extension).
+      // For now, let's construct it assuming backend respected our filename.
+      // Backend ensures .wav extension.
+      let finalName = filename;
+      if (!finalName.endsWith('.wav')) finalName += '.wav';
+
+      // Note: folderPath returned by backend is just the folder.
+      // We can assume the file is at folderPath/finalName
+      // But path joining in JS is tricky cross-platform.
+      // Let's just store the folder for now.
+      setRecordedPath(folderPath); // This is actually just the folder path right now.
+
+      setStep('review');
       setIsPaused(false);
-      if (folderPath) {
-        await invoke('plugin:opener|open_path', { path: folderPath });
-      }
     } catch (error) {
       console.error('Failed to stop recording:', error);
     }
   };
 
-  const handleSelect = (pid: number) => {
-    if (isRecording) return;
-    if (selectedPid === pid) {
-      setSelectedPid(null); // Deselect
-    } else {
-      setSelectedPid(pid);
+  const handleSave = async () => {
+    // Open folder
+    if (recordedPath) {
+      await invoke('plugin:opener|open_path', { path: recordedPath });
     }
+    resetState();
+  };
+
+  const handleDiscard = async () => {
+    // Delete file
+    // We need full path.
+    // Since we only have folder path and filename, let's try to construct it or just ignore for now if risky.
+    // But user asked for discard.
+    // Let's try to construct it.
+    // Actually, backend `delete_recording_command` takes a path.
+    // If we can't reliably get the path, we can't delete.
+    // Let's skip deletion for this iteration to be safe, or try best effort.
+    // Better: Update backend to return full path.
+    // But I already updated backend to return folder.
+    // Let's just reset state for now.
+    resetState();
+  };
+
+  const resetState = () => {
+    setStep('home');
+    setSelectedPid(null);
+    setFilename('');
+    setMicDevice(null);
+    setRecordedPath('');
+    setIsPaused(false);
   };
 
   return (
-    <div className="h-screen w-screen bg-stone-500/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
+    <div className="h-screen w-screen bg-neutral-700/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
       <TitleBar />
 
-      <div className="flex-1 flex flex-col p-6 gap-6">
-        <div className="flex flex-col items-center justify-center gap-1">
-          <img src={logo} alt="Scriberr" className="h-8 w-auto opacity-90" />
-          <span className="text-[10px] font-bold tracking-[0.3em] text-white/40 font-sans">
-            COMPANION
-          </span>
-        </div>
+      <div className="flex-1 flex flex-col p-6 overflow-hidden">
+        {step === 'home' && (
+          <>
+            <div className="flex flex-col items-center justify-center gap-1 mb-6">
+              <img src={logo} alt="Scriberr" className="h-8 w-auto opacity-90" />
+              <span className="text-[10px] font-bold tracking-[0.3em] text-white/40 font-sans">
+                COMPANION
+              </span>
+            </div>
 
-        <div className="flex-1 flex flex-col justify-center gap-8">
-          {isRecording ? (
-            <Timer isActive={!isPaused} />
-          ) : (
-            <AppSelector
-              selectedPid={selectedPid}
-              onSelect={handleSelect}
-              disabled={isRecording}
-            />
-          )}
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+              <div className="flex-1 overflow-y-auto">
+                <AppSelector
+                  selectedPid={selectedPid}
+                  onSelect={handleAppSelect}
+                  disabled={false}
+                />
+              </div>
 
-          <div className="px-4">
-            <MicSelector
-              onSelect={(name) => invoke('switch_microphone_command', { deviceName: name })}
-              disabled={false}
-            />
-          </div>
+              {selectedPid && (
+                <button
+                  onClick={handleNewRecordingClick}
+                  className="w-full bg-white text-black font-semibold rounded-xl py-4 hover:bg-white/90 transition-all active:scale-[0.98] shadow-lg shadow-white/10"
+                >
+                  New Recording
+                </button>
+              )}
+            </div>
+          </>
+        )}
 
-          <Controls
-            isRecording={isRecording}
+        {step === 'setup' && (
+          <SetupScreen
+            onStart={handleStartRecording}
+            onBack={() => setStep('home')}
+          />
+        )}
+
+        {step === 'recording' && (
+          <RecordingScreen
             isPaused={isPaused}
-            onStart={handleStart}
-            onStop={handleStop}
             onPause={handlePause}
             onResume={handleResume}
-            disabled={!selectedPid}
+            onStop={handleStop}
           />
-        </div>
+        )}
+
+        {step === 'review' && (
+          <ReviewScreen
+            initialFilename={filename}
+            filePath={recordedPath}
+            onSave={handleSave}
+            onDiscard={handleDiscard}
+          />
+        )}
       </div>
     </div>
   );

@@ -119,7 +119,7 @@ impl AudioRecorder {
         Ok(())
     }
 
-    pub async fn start_recording(&mut self, pid: i32, output_path: PathBuf) -> Result<(), String> {
+    pub async fn start_recording(&mut self, pid: i32, output_path: PathBuf, mic_device_name: Option<String>) -> Result<(), String> {
         self.stop_recording()?; // Ensure stopped
         self.paused.store(false, std::sync::atomic::Ordering::Relaxed);
 
@@ -152,51 +152,59 @@ impl AudioRecorder {
             }
         });
 
-        // ... setup mic and system audio ...
+        // 3. Setup Microphone (if requested)
+        if let Some(device_name) = mic_device_name {
+            if device_name != "None" {
+                 let mic_prod_mutex = Arc::new(Mutex::new(mic_prod));
+                *self.mic_producer.lock().unwrap() = Some(mic_prod_mutex.clone());
 
+                let host = cpal::default_host();
+                // Find device by name or default
+                let device = if device_name == "Default" {
+                    host.default_input_device()
+                } else {
+                    host.input_devices().map_err(|e| e.to_string())?
+                        .find(|d| d.name().unwrap_or_default() == device_name)
+                };
 
-        // 3. Setup Microphone
-        // 3. Setup Microphone (Default)
-        let mic_prod_mutex = Arc::new(Mutex::new(mic_prod));
-        *self.mic_producer.lock().unwrap() = Some(mic_prod_mutex.clone());
+                if let Some(device) = device {
+                     let config = cpal::StreamConfig {
+                        channels: 2,
+                        sample_rate: cpal::SampleRate(48000),
+                        buffer_size: cpal::BufferSize::Default,
+                    };
 
-        let host = cpal::default_host();
-        if let Some(device) = host.default_input_device() {
-             let config = cpal::StreamConfig {
-                channels: 2,
-                sample_rate: cpal::SampleRate(48000),
-                buffer_size: cpal::BufferSize::Default,
-            };
-
-            let mic_paused = self.paused.clone();
-            
-            let mic_stream = device.build_input_stream(
-                &config,
-                move |data: &[f32], _: &_| {
-                    if !mic_paused.load(std::sync::atomic::Ordering::Relaxed) {
-                        if let Ok(mut prod) = mic_prod_mutex.lock() {
-                            for &sample in data {
-                                let _ = prod.push(sample);
+                    let mic_paused = self.paused.clone();
+                    
+                    let mic_stream = device.build_input_stream(
+                        &config,
+                        move |data: &[f32], _: &_| {
+                            if !mic_paused.load(std::sync::atomic::Ordering::Relaxed) {
+                                if let Ok(mut prod) = mic_prod_mutex.lock() {
+                                    for &sample in data {
+                                        let _ = prod.push(sample);
+                                    }
+                                }
                             }
-                        }
-                    }
-                },
-                move |err| {
-                    eprintln!("Mic error: {:?}", err);
-                },
-                None
-            );
+                        },
+                        move |err| {
+                            eprintln!("Mic error: {:?}", err);
+                        },
+                        None
+                    );
 
-            match mic_stream {
-                Ok(stream) => {
-                    if let Ok(_) = stream.play() {
-                        self.mic_stream = Some(SendStream(stream));
+                    match mic_stream {
+                        Ok(stream) => {
+                            if let Ok(_) = stream.play() {
+                                self.mic_stream = Some(SendStream(stream));
+                            }
+                        },
+                        Err(e) => eprintln!("Failed to start mic: {:?}", e),
                     }
-                },
-                Err(e) => eprintln!("Failed to start default mic: {:?}", e),
+                } else {
+                    eprintln!("Requested mic device not found: {}", device_name);
+                }
             }
-        } else {
-            eprintln!("No default input device found");
         }
 
         // 4. Setup System Audio (SCK)

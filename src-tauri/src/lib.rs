@@ -28,8 +28,17 @@ async fn get_apps() -> Result<Vec<RunnableApp>, String> {
 }
 
 #[tauri::command]
-async fn start_recording_command(pid: i32, app_handle: AppHandle) -> Result<(), String> {
-    toggle_recording(&app_handle, pid).await;
+async fn start_recording_command(pid: i32, filename: Option<String>, mic_device: Option<String>, app_handle: AppHandle) -> Result<(), String> {
+    toggle_recording(&app_handle, pid, filename, mic_device).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_recording_command(path: String) -> Result<(), String> {
+    let path_buf = PathBuf::from(path);
+    if path_buf.exists() {
+        std::fs::remove_file(path_buf).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -80,6 +89,13 @@ async fn stop_recording_command(app_handle: AppHandle) -> Result<String, String>
         
         // Return the folder path to open it
         let folder = state.output_folder.lock().await.clone();
+        // Wait, we need the actual file path, not just folder.
+        // But recorder doesn't store the current file path in a way we can easily get it here unless we stored it in state.
+        // However, the UI might know the filename it passed.
+        // But for now, let's return the folder as before, or maybe the last file?
+        // Actually, the UI will construct the path, so returning folder is fine, OR we can return the full path if we stored it.
+        // Let's stick to returning folder for now, or empty string.
+        // The user wants to "Review" the file. The UI knows the filename it sent.
         return Ok(folder.to_string_lossy().to_string());
     }
     Ok("".to_string())
@@ -91,7 +107,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_apps, start_recording_command, stop_recording_command, pause_recording_command, resume_recording_command, get_microphones_command, switch_microphone_command])
+        .invoke_handler(tauri::generate_handler![get_apps, start_recording_command, stop_recording_command, pause_recording_command, resume_recording_command, get_microphones_command, switch_microphone_command, delete_recording_command])
         .setup(|app| {
             let documents_dir = app.path().document_dir().unwrap_or(PathBuf::from("/"));
             let output_folder = documents_dir.join("ScriberrRecordings");
@@ -158,7 +174,7 @@ pub fn run() {
 
 
 
-async fn toggle_recording(app: &AppHandle, pid: i32) {
+async fn toggle_recording(app: &AppHandle, pid: i32, filename: Option<String>, mic_device: Option<String>) {
     let state = app.state::<AppState>();
     let mut is_recording = state.is_recording.lock().await;
     let mut recorder = state.recorder.lock().await;
@@ -174,10 +190,15 @@ async fn toggle_recording(app: &AppHandle, pid: i32) {
     } else {
         // Start
         let folder = state.output_folder.lock().await.clone();
-        let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
-        let path = folder.join(format!("recording_{}.wav", timestamp));
+        let name = filename.unwrap_or_else(|| {
+            let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+            format!("recording_{}.wav", timestamp)
+        });
+        // Ensure extension
+        let name = if name.ends_with(".wav") { name } else { format!("{}.wav", name) };
+        let path = folder.join(name);
         
-        match recorder.start_recording(pid, path).await {
+        match recorder.start_recording(pid, path, mic_device).await {
             Ok(_) => {
                 *is_recording = true;
                 *state.recording_app_pid.lock().await = Some(pid);

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { FileAudio, CheckCircle, AlertCircle, Clock, Trash2 } from 'lucide-react';
+import { FileAudio, CheckCircle, AlertCircle, Clock, Trash2, UploadCloud, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface LedgerEntry {
-    id: string;
+    local_id: string;
+    remote_id: string | null;
     file_path: string;
     upload_status: string;
     created_at: string;
@@ -18,6 +19,7 @@ interface RecordingListProps {
 export function RecordingList({ onSelect }: RecordingListProps) {
     const [recordings, setRecordings] = useState<LedgerEntry[]>([]);
     const [loading, setLoading] = useState(false);
+    const [uploadingId, setUploadingId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string } | null>(null);
     const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -72,13 +74,30 @@ export function RecordingList({ onSelect }: RecordingListProps) {
     const confirmDelete = async () => {
         if (deleteId) {
             try {
-                await invoke('delete_recording_entry_command', { id: deleteId });
-                setRecordings(prev => prev.filter(r => r.id !== deleteId));
+                await invoke('delete_recording_entry_command', { localId: deleteId });
+                setRecordings(prev => prev.filter(r => r.local_id !== deleteId));
             } catch (error) {
                 console.error('Failed to delete recording:', error);
             } finally {
                 setDeleteId(null);
             }
+        }
+    };
+
+    const handleUpload = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (uploadingId) return;
+
+        setUploadingId(id);
+        try {
+            const updatedEntry = await invoke<LedgerEntry>('upload_recording_command', { localId: id });
+            setRecordings(prev => prev.map(r => r.local_id === id ? updatedEntry : r));
+        } catch (error) {
+            console.error('Failed to upload recording:', error);
+            // Refresh to get updated status (failed)
+            fetchRecordings();
+        } finally {
+            setUploadingId(null);
         }
     };
 
@@ -95,7 +114,11 @@ export function RecordingList({ onSelect }: RecordingListProps) {
         }
     };
 
-    const getStatusDisplay = (status: string) => {
+    const getStatusDisplay = (status: string, id: string) => {
+        if (uploadingId === id) {
+            return <Loader2 size={14} className="text-blue-400 animate-spin" />;
+        }
+
         switch (status) {
             case 'uploaded':
                 return <CheckCircle size={14} className="text-green-400" />;
@@ -129,8 +152,8 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 
                 {recordings.map((rec) => (
                     <div
-                        key={rec.id}
-                        onContextMenu={(e) => handleContextMenu(e, rec.id)}
+                        key={rec.local_id}
+                        onContextMenu={(e) => handleContextMenu(e, rec.local_id)}
                         className="group flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all cursor-default select-none relative"
                     >
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/20 to-blue-500/20 flex items-center justify-center border border-white/10 shrink-0">
@@ -144,8 +167,25 @@ export function RecordingList({ onSelect }: RecordingListProps) {
                             </span>
                         </div>
 
-                        <div className="shrink-0" title={rec.upload_status}>
-                            {getStatusDisplay(rec.upload_status)}
+                        <div className="shrink-0 relative w-5 h-5 flex items-center justify-center">
+                            {/* Status Icon (visible by default, hidden on group hover if not uploaded/uploading) */}
+                            <div className={clsx(
+                                "transition-opacity duration-200",
+                                (rec.upload_status !== 'uploaded' && uploadingId !== rec.local_id) && "group-hover:opacity-0"
+                            )}>
+                                {getStatusDisplay(rec.upload_status, rec.local_id)}
+                            </div>
+
+                            {/* Upload Button (hidden by default, visible on group hover if not uploaded/uploading) */}
+                            {rec.upload_status !== 'uploaded' && uploadingId !== rec.local_id && (
+                                <button
+                                    onClick={(e) => handleUpload(e, rec.local_id)}
+                                    className="absolute inset-0 flex items-center justify-center text-white/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                    title="Upload to Scriberr"
+                                >
+                                    <UploadCloud size={16} />
+                                </button>
+                            )}
                         </div>
                     </div>
                 ))}

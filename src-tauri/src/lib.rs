@@ -115,7 +115,8 @@ struct Settings {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 struct LedgerEntry {
-    id: String,
+    local_id: String,
+    remote_id: Option<String>,
     file_path: String,
     upload_status: String, // "incomplete", "uploaded", "failed"
     created_at: String,
@@ -176,7 +177,8 @@ async fn add_recording_command(file_path: String) -> Result<LedgerEntry, String>
     let mut entries = load_ledger();
     
     let entry = LedgerEntry {
-        id: uuid::Uuid::new_v4().to_string(),
+        local_id: uuid::Uuid::new_v4().to_string(),
+        remote_id: None,
         file_path: file_path.clone(),
         upload_status: "incomplete".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -196,10 +198,10 @@ async fn get_recordings_command() -> Result<Vec<LedgerEntry>, String> {
 }
 
 #[tauri::command]
-async fn delete_recording_entry_command(id: String) -> Result<(), String> {
+async fn delete_recording_entry_command(local_id: String) -> Result<(), String> {
     let mut entries = load_ledger();
     
-    if let Some(index) = entries.iter().position(|e| e.id == id) {
+    if let Some(index) = entries.iter().position(|e| e.local_id == local_id) {
         let entry = &entries[index];
         // Try to delete file
         let path = PathBuf::from(&entry.file_path);
@@ -261,6 +263,81 @@ async fn load_settings_command() -> Result<Settings, String> {
     Ok(settings)
 }
 
+#[tauri::command]
+async fn upload_recording_command(local_id: String) -> Result<LedgerEntry, String> {
+    let mut entries = load_ledger();
+    let settings = load_settings_command().await?;
+    
+    if settings.scriberr_url.is_empty() || settings.api_key.is_empty() {
+        return Err("Settings not configured".to_string());
+    }
+
+    let index = entries.iter().position(|e| e.local_id == local_id).ok_or("Recording not found")?;
+    let mut entry = entries[index].clone();
+    
+    // Check file existence
+    let file_path = PathBuf::from(&entry.file_path);
+    if !file_path.exists() {
+        return Err("File not found".to_string());
+    }
+
+    // Prepare upload
+    let client = reqwest::Client::new();
+    let base_url = settings.scriberr_url.trim_end_matches('/');
+    let endpoint = format!("{}/api/v1/transcription/upload", base_url);
+
+    // Create multipart form
+    // Read file manually to avoid async/sync confusion with Form::file
+    let file_bytes = tokio::fs::read(&entry.file_path).await.map_err(|e| format!("Failed to read file: {}", e))?;
+    let filename = PathBuf::from(&entry.file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("recording.wav")
+        .to_string();
+
+    let part = reqwest::multipart::Part::bytes(file_bytes).file_name(filename.clone());
+    let form = reqwest::multipart::Form::new()
+        .part("audio", part)
+        .text("title", filename);
+
+    // Send request
+    let response = client.post(&endpoint)
+        .header("X-API-Key", &settings.api_key)
+        .multipart(form)
+        .send()
+        .await;
+
+    match response {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                // Parse response to get remote ID
+                let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+                if let Some(id) = body.get("id").and_then(|v| v.as_str()) {
+                    entry.remote_id = Some(id.to_string());
+                }
+                entry.upload_status = "uploaded".to_string();
+            } else {
+                entry.upload_status = "failed".to_string();
+                entry.retry_count += 1;
+            }
+        },
+        Err(_) => {
+            entry.upload_status = "failed".to_string();
+            entry.retry_count += 1;
+        }
+    }
+
+    // Update ledger
+    entries[index] = entry.clone();
+    save_ledger(&entries)?;
+
+    if entry.upload_status == "failed" {
+        return Err("Upload failed".to_string());
+    }
+
+    Ok(entry)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -281,7 +358,8 @@ pub fn run() {
             load_settings_command,
             add_recording_command,
             get_recordings_command,
-            delete_recording_entry_command
+            delete_recording_entry_command,
+            upload_recording_command
         ])
         .setup(|app| {
             let documents_dir = app.path().document_dir().unwrap_or(PathBuf::from("/"));

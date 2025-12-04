@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ArrowLeft, Save, Wifi, WifiOff, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { ArrowLeft, Save, Wifi, WifiOff, Loader2, CheckCircle, AlertCircle, Folder } from 'lucide-react';
 import clsx from 'clsx';
 import logo from '../assets/logo.svg';
 
@@ -11,12 +12,14 @@ interface SettingsScreenProps {
 interface Settings {
     scriberr_url: string;
     api_key: string;
+    output_path: string;
 }
 
 export function SettingsScreen({ onBack }: SettingsScreenProps) {
     const [url, setUrl] = useState('');
     const [apiKey, setApiKey] = useState('');
-    const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+    const [outputPath, setOutputPath] = useState('');
+    const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error' | 'saving'>('idle');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
 
@@ -29,6 +32,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             const settings = await invoke<Settings>('load_settings_command');
             setUrl(settings.scriberr_url);
             setApiKey(settings.api_key);
+            setOutputPath(settings.output_path);
         } catch (e) {
             console.error('Failed to load settings:', e);
         } finally {
@@ -42,6 +46,24 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             return true;
         } catch {
             return false;
+        }
+    };
+
+    const handleBrowse = async () => {
+        try {
+            const selected = await open({
+                directory: true,
+                multiple: false,
+                defaultPath: outputPath || undefined,
+            });
+
+            if (selected && typeof selected === 'string') {
+                setOutputPath(selected);
+                setStatus('idle');
+                setMessage('');
+            }
+        } catch (err) {
+            console.error("Failed to pick folder:", err);
         }
     };
 
@@ -77,7 +99,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
     };
 
     const handleSave = async () => {
-        if (!url || !apiKey) {
+        if (!url || !apiKey || !outputPath) {
             setStatus('error');
             setMessage('Please fill in all fields');
             return;
@@ -89,13 +111,14 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             return;
         }
 
+        setStatus('saving');
+        setMessage('Saving settings (moving files if needed)...');
+
         try {
             await invoke('save_settings_command', {
-                settings: { scriberr_url: url, api_key: apiKey }
+                settings: { scriberr_url: url, api_key: apiKey, output_path: outputPath }
             });
-            // Also test connection implicitly or just save? 
-            // User asked for separate buttons, but good to verify.
-            // For now just save.
+
             setStatus('success');
             setMessage('Settings saved!');
             setTimeout(() => {
@@ -131,7 +154,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col gap-4 overflow-y-auto min-h-0 pr-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+            <div className="flex-1 flex flex-col gap-4 overflow-y-auto min-h-0 pr-1 flex flex-col gap-4">
                 {/* URL Input */}
                 <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] font-medium text-white/60 uppercase tracking-wider">Scriberr URL</label>
@@ -164,15 +187,32 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                     />
                 </div>
 
+                {/* Storage Location Input */}
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-medium text-white/60 uppercase tracking-wider">Storage Location</label>
+                    <div className="flex gap-2">
+                        <div className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 truncate font-mono flex items-center">
+                            <span className="truncate">{outputPath || 'Default'}</span>
+                        </div>
+                        <button
+                            onClick={handleBrowse}
+                            className="bg-white/10 hover:bg-white/20 border border-white/10 text-white p-2 rounded-lg transition-colors"
+                            title="Select Folder"
+                        >
+                            <Folder size={18} />
+                        </button>
+                    </div>
+                </div>
+
                 {/* Status Message */}
                 {status !== 'idle' && (
                     <div className={clsx(
                         "flex items-center gap-2 text-xs p-2.5 rounded-lg backdrop-blur-md border",
-                        status === 'testing' && "bg-blue-500/10 border-blue-500/20 text-blue-200",
+                        (status === 'testing' || status === 'saving') && "bg-blue-500/10 border-blue-500/20 text-blue-200",
                         status === 'success' && "bg-green-500/10 border-green-500/20 text-green-200",
                         status === 'error' && "bg-red-500/10 border-red-500/20 text-red-200"
                     )}>
-                        {status === 'testing' && <Loader2 size={14} className="animate-spin" />}
+                        {(status === 'testing' || status === 'saving') && <Loader2 size={14} className="animate-spin" />}
                         {status === 'success' && <CheckCircle size={14} />}
                         {status === 'error' && <AlertCircle size={14} />}
                         <span>{message}</span>
@@ -183,7 +223,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             <div className="mt-4 flex flex-col gap-2 shrink-0">
                 <button
                     onClick={handleTestConnection}
-                    disabled={status === 'testing' || !url || !apiKey}
+                    disabled={status === 'testing' || status === 'saving' || !url || !apiKey}
                     className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 text-sm font-medium rounded-lg py-2.5 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <Wifi size={16} />
@@ -192,7 +232,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
 
                 <button
                     onClick={handleSave}
-                    disabled={status === 'testing' || !url || !apiKey}
+                    disabled={status === 'testing' || status === 'saving' || !url || !apiKey}
                     className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-medium rounded-lg py-2.5 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <Save size={16} />

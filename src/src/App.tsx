@@ -174,8 +174,8 @@ function App() {
         {step === 'home' && (
           <>
             <div className="flex flex-col items-center justify-center gap-1 mb-6">
-              <img src={logo} alt="Scriberr" className="h-8 w-auto opacity-100" />
-              <span className="text-[10px] font-bold tracking-[0.3em] text-white/40 font-sans">
+              <img src={logo} alt="Scriberr" className="h-6 w-auto opacity-100" />
+              <span className="text-[8px] font-bold tracking-[0.3em] text-white/40 font-sans">
                 COMPANION
               </span>
             </div>

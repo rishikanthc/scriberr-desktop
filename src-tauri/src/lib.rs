@@ -111,6 +111,7 @@ async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult
 struct Settings {
     scriberr_url: String,
     api_key: String,
+    output_path: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -237,10 +238,77 @@ fn get_settings_path() -> PathBuf {
 }
 
 #[tauri::command]
-async fn save_settings_command(settings: Settings) -> Result<(), String> {
+async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Result<(), String> {
     let path = get_settings_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    
+    // Load old settings to check for path change
+    let old_settings = load_settings_command(app_handle.clone()).await.unwrap_or(Settings {
+        scriberr_url: "".to_string(),
+        api_key: "".to_string(),
+        output_path: "".to_string(),
+    });
+
+    let old_path_str = if old_settings.output_path.is_empty() {
+        let documents_dir = app_handle.path().document_dir().unwrap_or(PathBuf::from("/"));
+        documents_dir.join("ScriberrRecordings").to_string_lossy().to_string()
+    } else {
+        old_settings.output_path.clone()
+    };
+
+    let new_path_str = if settings.output_path.is_empty() {
+        let documents_dir = app_handle.path().document_dir().unwrap_or(PathBuf::from("/"));
+        documents_dir.join("ScriberrRecordings").to_string_lossy().to_string()
+    } else {
+        settings.output_path.clone()
+    };
+
+    if old_path_str != new_path_str {
+        let old_path = PathBuf::from(&old_path_str);
+        let new_path = PathBuf::from(&new_path_str);
+
+        if old_path.exists() {
+            // Create new directory if it doesn't exist
+            if !new_path.exists() {
+                std::fs::create_dir_all(&new_path).map_err(|e| e.to_string())?;
+            }
+
+            // Move files
+            // We iterate over entries in old_path and move them to new_path
+            let entries = std::fs::read_dir(&old_path).map_err(|e| e.to_string())?;
+            for entry in entries {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let path = entry.path();
+                if path.is_file() {
+                    let file_name = path.file_name().ok_or("Invalid filename")?;
+                    let new_file_path = new_path.join(file_name);
+                    std::fs::rename(&path, &new_file_path).map_err(|e| e.to_string())?;
+                }
+            }
+            // Optionally remove old directory if empty? User didn't specify, but good practice.
+            // let _ = std::fs::remove_dir(&old_path);
+        }
+
+        // Update Ledger
+        let mut ledger_entries = load_ledger();
+        for entry in &mut ledger_entries {
+            // Check if entry.file_path starts with old_path
+            // We need to be careful with path separators and exact matching
+            let entry_path = PathBuf::from(&entry.file_path);
+            if entry_path.starts_with(&old_path) {
+                if let Ok(stripped) = entry_path.strip_prefix(&old_path) {
+                    let new_entry_path = new_path.join(stripped);
+                    entry.file_path = new_entry_path.to_string_lossy().to_string();
+                }
+            }
+        }
+        save_ledger(&ledger_entries)?;
+
+        // Update AppState
+        let state = app_handle.state::<AppState>();
+        *state.output_folder.lock().await = new_path;
     }
     
     let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
@@ -249,24 +317,32 @@ async fn save_settings_command(settings: Settings) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn load_settings_command() -> Result<Settings, String> {
+async fn load_settings_command(app_handle: AppHandle) -> Result<Settings, String> {
     let path = get_settings_path();
+    let default_path = app_handle.path().document_dir().unwrap_or(PathBuf::from("/")).join("ScriberrRecordings").to_string_lossy().to_string();
+
     if !path.exists() {
         return Ok(Settings {
             scriberr_url: "".to_string(),
             api_key: "".to_string(),
+            output_path: default_path,
         });
     }
     
     let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let settings: Settings = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let mut settings: Settings = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    
+    if settings.output_path.is_empty() {
+        settings.output_path = default_path;
+    }
+
     Ok(settings)
 }
 
 #[tauri::command]
-async fn upload_recording_command(local_id: String) -> Result<LedgerEntry, String> {
+async fn upload_recording_command(local_id: String, app_handle: AppHandle) -> Result<LedgerEntry, String> {
     let mut entries = load_ledger();
-    let settings = load_settings_command().await?;
+    let settings = load_settings_command(app_handle).await?;
     
     if settings.scriberr_url.is_empty() || settings.api_key.is_empty() {
         return Err("Settings not configured".to_string());
@@ -378,7 +454,28 @@ pub fn run() {
         ])
         .setup(|app| {
             let documents_dir = app.path().document_dir().unwrap_or(PathBuf::from("/"));
-            let output_folder = documents_dir.join("ScriberrRecordings");
+            let default_output = documents_dir.join("ScriberrRecordings");
+            
+            // Try to load settings to get configured output path
+            let settings_path = get_settings_path();
+            let output_folder = if settings_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&settings_path) {
+                    if let Ok(settings) = serde_json::from_str::<Settings>(&content) {
+                        if !settings.output_path.is_empty() {
+                            PathBuf::from(settings.output_path)
+                        } else {
+                            default_output
+                        }
+                    } else {
+                        default_output
+                    }
+                } else {
+                    default_output
+                }
+            } else {
+                default_output
+            };
+
             if !output_folder.exists() {
                 let _ = std::fs::create_dir_all(&output_folder);
             }

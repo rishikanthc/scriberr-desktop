@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { TitleBar } from './components/TitleBar';
 import { AppSelector } from './components/AppSelector';
 import { SetupScreen } from './components/SetupScreen';
 import { RecordingScreen } from './components/RecordingScreen';
 import { ReviewScreen } from './components/ReviewScreen';
+import { SettingsScreen } from './components/SettingsScreen';
 import logo from './assets/logo.svg';
+import { Settings } from 'lucide-react';
+import clsx from 'clsx';
 
-type AppStep = 'home' | 'setup' | 'recording' | 'review';
+type AppStep = 'home' | 'setup' | 'recording' | 'review' | 'settings';
 
 function App() {
   const [step, setStep] = useState<AppStep>('home');
@@ -17,13 +20,35 @@ function App() {
   const [recordedFilePath, setRecordedFilePath] = useState('');
   const [recordedFolderPath, setRecordedFolderPath] = useState('');
   const [isPaused, setIsPaused] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    checkConnectivity();
+
+    // Periodic check every 30 seconds
+    const interval = setInterval(checkConnectivity, 30000);
+    return () => clearInterval(interval);
+  }, [step]); // Re-check when returning to home or changing steps
+
+  const checkConnectivity = async () => {
+    try {
+      const settings = await invoke<{ scriberr_url: string; api_key: string }>('load_settings_command');
+      if (settings.scriberr_url && settings.api_key) {
+        const connected = await invoke<boolean>('check_connection_command', {
+          url: settings.scriberr_url,
+          apiKey: settings.api_key
+        });
+        setIsConnected(connected);
+      } else {
+        setIsConnected(false);
+      }
+    } catch (e) {
+      setIsConnected(false);
+    }
+  };
 
   const handleAppSelect = (pid: number) => {
     if (selectedPid === pid) {
-      // If already selected, maybe just go to setup?
-      // Or toggle selection.
-      // User said: "After I pick an app... show a button for new recording"
-      // Let's keep selection logic, and show button if selected.
       setSelectedPid(null);
     } else {
       setSelectedPid(pid);
@@ -106,8 +131,6 @@ function App() {
         await invoke('delete_recording_command', { path: recordedFilePath });
       } catch (e) {
         console.error("Failed to delete recording:", e);
-        // Throw so ReviewScreen knows it failed? Or just swallow?
-        // User wants to know success/failure.
         throw e;
       }
     }
@@ -129,7 +152,7 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-neutral-700/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
-      <TitleBar />
+      <TitleBar isConnected={isConnected} />
 
       <div className="flex-1 flex flex-col p-6 overflow-hidden">
         {step === 'home' && (
@@ -150,14 +173,24 @@ function App() {
                 />
               </div>
 
-              {selectedPid && (
+              <div className="mt-auto pt-3 flex items-center gap-3 justify-end">
+                {selectedPid && (
+                  <button
+                    onClick={handleNewRecordingClick}
+                    className="flex-1 bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-medium rounded-xl py-3 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md"
+                  >
+                    New Recording
+                  </button>
+                )}
+
                 <button
-                  onClick={handleNewRecordingClick}
-                  className="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white font-medium rounded-xl py-4 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md"
+                  onClick={() => setStep('settings')}
+                  className="text-white/40 hover:text-white/90 transition-colors p-2 rounded-lg"
+                  title="Settings"
                 >
-                  New Recording
+                  <Settings size={20} />
                 </button>
-              )}
+              </div>
             </div>
           </>
         )}
@@ -186,6 +219,12 @@ function App() {
             onSave={handleSave}
             onDiscard={handleDiscard}
             onExit={handleReviewExit}
+          />
+        )}
+
+        {step === 'settings' && (
+          <SettingsScreen
+            onBack={() => setStep('home')}
           />
         )}
       </div>

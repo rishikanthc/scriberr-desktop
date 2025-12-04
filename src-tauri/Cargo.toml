@@ -33,4 +33,5 @@ core-foundation = "0.10.1"
 core-media-sys = "0.1.2"
 cpal = "0.15.2"
 ringbuf = "0.3.3"
+reqwest = { version = "0.12.24", features = ["json"] }
 

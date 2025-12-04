@@ -107,13 +107,78 @@ async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult
     Err("Not recording".to_string())
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct Settings {
+    scriberr_url: String,
+    api_key: String,
+}
+
+#[tauri::command]
+async fn check_connection_command(url: String, api_key: String) -> Result<bool, String> {
+    let client = reqwest::Client::new();
+    let base_url = url.trim_end_matches('/');
+    let endpoint = format!("{}/api/v1/transcription/models", base_url);
+    
+    let resp = client.get(&endpoint)
+        .header("X-API-Key", &api_key)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    Ok(resp.status().is_success())
+}
+
+fn get_settings_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home).join(".config").join("scriberr-companion").join("settings.json")
+}
+
+#[tauri::command]
+async fn save_settings_command(settings: Settings) -> Result<(), String> {
+    let path = get_settings_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    
+    let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn load_settings_command() -> Result<Settings, String> {
+    let path = get_settings_path();
+    if !path.exists() {
+        return Ok(Settings {
+            scriberr_url: "".to_string(),
+            api_key: "".to_string(),
+        });
+    }
+    
+    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let settings: Settings = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    Ok(settings)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_apps, start_recording_command, stop_recording_command, pause_recording_command, resume_recording_command, get_microphones_command, switch_microphone_command, delete_recording_command])
+        .invoke_handler(tauri::generate_handler![
+            get_apps, 
+            start_recording_command, 
+            stop_recording_command, 
+            pause_recording_command, 
+            resume_recording_command, 
+            get_microphones_command, 
+            switch_microphone_command, 
+            delete_recording_command,
+            check_connection_command,
+            save_settings_command,
+            load_settings_command
+        ])
         .setup(|app| {
             let documents_dir = app.path().document_dir().unwrap_or(PathBuf::from("/"));
             let output_folder = documents_dir.join("ScriberrRecordings");

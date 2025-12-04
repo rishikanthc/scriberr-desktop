@@ -33,6 +33,7 @@ pub struct AudioRecorder {
     
     paused: Arc<std::sync::atomic::AtomicBool>,
     mixer_running: Arc<std::sync::atomic::AtomicBool>,
+    mic_producer: Arc<Mutex<Option<Arc<Mutex<HeapProducer<f32>>>>>>,
 }
 
 
@@ -46,6 +47,7 @@ impl AudioRecorder {
             writer: Arc::new(Mutex::new(None)),
             paused: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             mixer_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            mic_producer: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -55,6 +57,66 @@ impl AudioRecorder {
 
     pub fn resume_recording(&self) {
         self.paused.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn get_microphones() -> Vec<(String, String)> {
+        let host = cpal::default_host();
+        host.input_devices().map(|devices| {
+            devices.filter_map(|d| {
+                let name = d.name().unwrap_or("Unknown Device".to_string());
+                // Use name as ID for now, or index if possible? 
+                // cpal doesn't expose stable IDs easily across platforms.
+                // Using name is risky if duplicates exist.
+                // But for macOS, names are usually unique enough for UI.
+                Some((name.clone(), name))
+            }).collect()
+        }).unwrap_or_default()
+    }
+
+    pub fn switch_microphone(&mut self, device_name: String) -> Result<(), String> {
+        // Stop current mic stream
+        self.mic_stream = None;
+
+        let host = cpal::default_host();
+        let device = host.input_devices().map_err(|e| e.to_string())?
+            .find(|d| d.name().unwrap_or_default() == device_name)
+            .ok_or("Device not found")?;
+
+        let config = cpal::StreamConfig {
+            channels: 2,
+            sample_rate: cpal::SampleRate(48000),
+            buffer_size: cpal::BufferSize::Default,
+        };
+
+        // Get the producer
+        let producer_arc = {
+            let guard = self.mic_producer.lock().unwrap();
+            guard.clone().ok_or("Mixer not initialized")?
+        };
+
+        let mic_paused = self.paused.clone();
+        
+        let mic_stream = device.build_input_stream(
+            &config,
+            move |data: &[f32], _: &_| {
+                if !mic_paused.load(std::sync::atomic::Ordering::Relaxed) {
+                    if let Ok(mut prod) = producer_arc.lock() {
+                        for &sample in data {
+                            let _ = prod.push(sample);
+                        }
+                    }
+                }
+            },
+            move |err| {
+                eprintln!("Mic error: {:?}", err);
+            },
+            None
+        ).map_err(|e| format!("Failed to build mic stream: {:?}", e))?;
+
+        mic_stream.play().map_err(|e| format!("Failed to play mic stream: {:?}", e))?;
+        self.mic_stream = Some(SendStream(mic_stream));
+        
+        Ok(())
     }
 
     pub async fn start_recording(&mut self, pid: i32, output_path: PathBuf) -> Result<(), String> {
@@ -94,37 +156,48 @@ impl AudioRecorder {
 
 
         // 3. Setup Microphone
-        let host = cpal::default_host();
-        let device = host.default_input_device().ok_or("No input device available")?;
-        
-        let config = cpal::StreamConfig {
-            channels: 2,
-            sample_rate: cpal::SampleRate(48000),
-            buffer_size: cpal::BufferSize::Default,
-        };
-
+        // 3. Setup Microphone (Default)
         let mic_prod_mutex = Arc::new(Mutex::new(mic_prod));
-        let mic_paused = self.paused.clone();
-        
-        let mic_stream = device.build_input_stream(
-            &config,
-            move |data: &[f32], _: &_| {
-                if !mic_paused.load(std::sync::atomic::Ordering::Relaxed) {
-                    if let Ok(mut prod) = mic_prod_mutex.lock() {
-                        for &sample in data {
-                            let _ = prod.push(sample);
+        *self.mic_producer.lock().unwrap() = Some(mic_prod_mutex.clone());
+
+        let host = cpal::default_host();
+        if let Some(device) = host.default_input_device() {
+             let config = cpal::StreamConfig {
+                channels: 2,
+                sample_rate: cpal::SampleRate(48000),
+                buffer_size: cpal::BufferSize::Default,
+            };
+
+            let mic_paused = self.paused.clone();
+            
+            let mic_stream = device.build_input_stream(
+                &config,
+                move |data: &[f32], _: &_| {
+                    if !mic_paused.load(std::sync::atomic::Ordering::Relaxed) {
+                        if let Ok(mut prod) = mic_prod_mutex.lock() {
+                            for &sample in data {
+                                let _ = prod.push(sample);
+                            }
                         }
                     }
-                }
-            },
-            move |err| {
-                eprintln!("Mic error: {:?}", err);
-            },
-            None
-        ).map_err(|e| format!("Failed to build mic stream: {:?}", e))?;
+                },
+                move |err| {
+                    eprintln!("Mic error: {:?}", err);
+                },
+                None
+            );
 
-        mic_stream.play().map_err(|e| format!("Failed to play mic stream: {:?}", e))?;
-        self.mic_stream = Some(SendStream(mic_stream));
+            match mic_stream {
+                Ok(stream) => {
+                    if let Ok(_) = stream.play() {
+                        self.mic_stream = Some(SendStream(stream));
+                    }
+                },
+                Err(e) => eprintln!("Failed to start default mic: {:?}", e),
+            }
+        } else {
+            eprintln!("No default input device found");
+        }
 
         // 4. Setup System Audio (SCK)
         let content = SCShareableContent::current();
@@ -218,6 +291,21 @@ impl StreamOutput for OutputWrapper {
                     totalLengthOut: *mut usize,
                     dataPointerOut: *mut *mut u8
                 ) -> i32;
+                fn CMSampleBufferGetFormatDescription(sbuf: CMSampleBufferRef) -> *mut std::ffi::c_void;
+                fn CMAudioFormatDescriptionGetStreamBasicDescription(fmt_desc: *mut std::ffi::c_void) -> *const AudioStreamBasicDescription;
+            }
+
+            #[repr(C)]
+            struct AudioStreamBasicDescription {
+                pub mSampleRate: f64,
+                pub mFormatID: u32,
+                pub mFormatFlags: u32,
+                pub mBytesPerPacket: u32,
+                pub mFramesPerPacket: u32,
+                pub mBytesPerFrame: u32,
+                pub mChannelsPerFrame: u32,
+                pub mBitsPerChannel: u32,
+                pub mReserved: u32,
             }
             
             let ptr: CMSampleBufferRef = std::mem::transmute_copy(&sys_ref);
@@ -241,10 +329,44 @@ impl StreamOutput for OutputWrapper {
                 let f32_ptr = data_ptr as *const f32;
                 let samples = std::slice::from_raw_parts(f32_ptr, num_samples);
                 
+                // Get Format Info
+                let fmt_desc = CMSampleBufferGetFormatDescription(ptr);
+                let asbd_ptr = CMAudioFormatDescriptionGetStreamBasicDescription(fmt_desc);
+                
+                let mut is_planar = false;
+                let mut channels = 2;
+                
+                if !asbd_ptr.is_null() {
+                    let asbd = &*asbd_ptr;
+                    channels = asbd.mChannelsPerFrame as usize;
+                    is_planar = (asbd.mFormatFlags & (1 << 5)) != 0; // kAudioFormatFlagIsNonInterleaved
+                }
+
                 if !self.paused.load(std::sync::atomic::Ordering::Relaxed) {
                     if let Ok(mut prod) = self.producer.lock() {
-                        for &sample in samples {
-                            let _ = prod.push(sample);
+                        if is_planar && channels == 2 {
+                            // Planar Stereo: [LLLL...][RRRR...]
+                            // We need to interleave: L, R, L, R...
+                            let num_frames = num_samples / 2;
+                            let left = &samples[0..num_frames];
+                            let right = &samples[num_frames..2*num_frames];
+                            
+                            for i in 0..num_frames {
+                                let _ = prod.push(left[i]);
+                                let _ = prod.push(right[i]);
+                            }
+                        } else if channels == 1 {
+                            // Mono: [M, M, M...]
+                            // Duplicate for Stereo: M, M, M, M...
+                            for &sample in samples {
+                                let _ = prod.push(sample);
+                                let _ = prod.push(sample);
+                            }
+                        } else {
+                            // Interleaved Stereo (or unknown), push as is
+                            for &sample in samples {
+                                let _ = prod.push(sample);
+                            }
                         }
                     }
                 }

@@ -50,6 +50,18 @@ async fn resume_recording_command(app_handle: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn get_microphones_command() -> Result<Vec<(String, String)>, String> {
+    Ok(AudioRecorder::get_microphones())
+}
+
+#[tauri::command]
+async fn switch_microphone_command(device_name: String, app_handle: AppHandle) -> Result<(), String> {
+    let state = app_handle.state::<AppState>();
+    let mut recorder = state.recorder.lock().await;
+    recorder.switch_microphone(device_name)
+}
+
+#[tauri::command]
 async fn stop_recording_command(app_handle: AppHandle) -> Result<String, String> {
     let state = app_handle.state::<AppState>();
     let mut is_recording = state.is_recording.lock().await;
@@ -79,7 +91,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_apps, start_recording_command, stop_recording_command, pause_recording_command, resume_recording_command])
+        .invoke_handler(tauri::generate_handler![get_apps, start_recording_command, stop_recording_command, pause_recording_command, resume_recording_command, get_microphones_command, switch_microphone_command])
         .setup(|app| {
             let documents_dir = app.path().document_dir().unwrap_or(PathBuf::from("/"));
             let output_folder = documents_dir.join("ScriberrRecordings");

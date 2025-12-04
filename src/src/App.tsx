@@ -4,6 +4,7 @@ import { TitleBar } from './components/TitleBar';
 import { AppSelector } from './components/AppSelector';
 import { Controls } from './components/Controls';
 import { Timer } from './components/Timer';
+import { MicSelector } from './components/MicSelector';
 
 function App() {
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
@@ -86,6 +87,13 @@ function App() {
               disabled={isRecording}
             />
           )}
+
+          <div className="px-4">
+            <MicSelector
+              onSelect={(name) => invoke('switch_microphone_command', { deviceName: name })}
+              disabled={false} // Always allow switching? Yes.
+            />
+          </div>
 
           <Controls
             isRecording={isRecording}

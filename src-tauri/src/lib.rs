@@ -18,6 +18,7 @@ struct AppState {
     is_recording: Mutex<bool>,
     output_folder: Mutex<PathBuf>,
     recording_app_pid: Mutex<Option<i32>>,
+    current_recording_path: Mutex<Option<PathBuf>>,
 }
 
 use discovery::RunnableApp;
@@ -70,8 +71,14 @@ async fn switch_microphone_command(device_name: String, app_handle: AppHandle) -
     recorder.switch_microphone(device_name)
 }
 
+#[derive(serde::Serialize)]
+struct RecordingResult {
+    file_path: String,
+    folder_path: String,
+}
+
 #[tauri::command]
-async fn stop_recording_command(app_handle: AppHandle) -> Result<String, String> {
+async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult, String> {
     let state = app_handle.state::<AppState>();
     let mut is_recording = state.is_recording.lock().await;
     let mut recorder = state.recorder.lock().await;
@@ -87,18 +94,18 @@ async fn stop_recording_command(app_handle: AppHandle) -> Result<String, String>
         *state.recording_app_pid.lock().await = None;
         println!("Recording stopped successfully");
         
-        // Return the folder path to open it
         let folder = state.output_folder.lock().await.clone();
-        // Wait, we need the actual file path, not just folder.
-        // But recorder doesn't store the current file path in a way we can easily get it here unless we stored it in state.
-        // However, the UI might know the filename it passed.
-        // But for now, let's return the folder as before, or maybe the last file?
-        // Actually, the UI will construct the path, so returning folder is fine, OR we can return the full path if we stored it.
-        // Let's stick to returning folder for now, or empty string.
-        // The user wants to "Review" the file. The UI knows the filename it sent.
-        return Ok(folder.to_string_lossy().to_string());
+        let folder_str = folder.to_string_lossy().to_string();
+        
+        let path_opt = state.current_recording_path.lock().await.clone();
+        let file_str = path_opt.map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+
+        return Ok(RecordingResult {
+            file_path: file_str,
+            folder_path: folder_str,
+        });
     }
-    Ok("".to_string())
+    Err("Not recording".to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -129,6 +136,7 @@ pub fn run() {
                 is_recording: Mutex::new(false),
                 output_folder: Mutex::new(output_folder.clone()),
                 recording_app_pid: Mutex::new(None),
+                current_recording_path: Mutex::new(None),
             };
             app.manage(state);
 
@@ -198,10 +206,11 @@ async fn toggle_recording(app: &AppHandle, pid: i32, filename: Option<String>, m
         let name = if name.ends_with(".wav") { name } else { format!("{}.wav", name) };
         let path = folder.join(name);
         
-        match recorder.start_recording(pid, path, mic_device).await {
+        match recorder.start_recording(pid, path.clone(), mic_device).await {
             Ok(_) => {
                 *is_recording = true;
                 *state.recording_app_pid.lock().await = Some(pid);
+                *state.current_recording_path.lock().await = Some(path);
                 println!("Started recording PID {}", pid);
             }
             Err(e) => eprintln!("Failed to start recording: {}", e),

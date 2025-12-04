@@ -14,7 +14,8 @@ function App() {
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
   const [filename, setFilename] = useState('');
   const [micDevice, setMicDevice] = useState<string | null>(null);
-  const [recordedPath, setRecordedPath] = useState('');
+  const [recordedFilePath, setRecordedFilePath] = useState('');
+  const [recordedFolderPath, setRecordedFolderPath] = useState('');
   const [isPaused, setIsPaused] = useState(false);
 
   const handleAppSelect = (pid: number) => {
@@ -72,19 +73,14 @@ function App() {
 
   const handleStop = async () => {
     try {
-      const folderPath = await invoke<string>('stop_recording_command');
-      // We need the full path. Since we know the folder and filename...
-      // But filename might have been modified by backend (e.g. extension).
-      // For now, let's construct it assuming backend respected our filename.
-      // Backend ensures .wav extension.
-      let finalName = filename;
-      if (!finalName.endsWith('.wav')) finalName += '.wav';
+      interface RecordingResult {
+        file_path: string;
+        folder_path: string;
+      }
+      const result = await invoke<RecordingResult>('stop_recording_command');
 
-      // Note: folderPath returned by backend is just the folder.
-      // We can assume the file is at folderPath/finalName
-      // But path joining in JS is tricky cross-platform.
-      // Let's just store the folder for now.
-      setRecordedPath(folderPath); // This is actually just the folder path right now.
+      setRecordedFilePath(result.file_path);
+      setRecordedFolderPath(result.folder_path);
 
       setStep('review');
       setIsPaused(false);
@@ -95,31 +91,29 @@ function App() {
 
   const handleSave = async () => {
     // Open folder
-    if (recordedPath) {
+    if (recordedFolderPath) {
       // Fire and forget to prevent blocking the UI if opener hangs
-      invoke('plugin:opener|open_path', { path: recordedPath }).catch(e => {
+      invoke('plugin:opener|open_path', { path: recordedFolderPath }).catch(e => {
         console.error("Failed to open path:", e);
       });
     }
     // Do not reset state here, let ReviewScreen handle it after animation
   };
 
-  const handleReviewExit = () => {
-    resetState();
+  const handleDiscard = async () => {
+    if (recordedFilePath) {
+      try {
+        await invoke('delete_recording_command', { path: recordedFilePath });
+      } catch (e) {
+        console.error("Failed to delete recording:", e);
+        // Throw so ReviewScreen knows it failed? Or just swallow?
+        // User wants to know success/failure.
+        throw e;
+      }
+    }
   };
 
-  const handleDiscard = async () => {
-    // Delete file
-    // We need full path.
-    // Since we only have folder path and filename, let's try to construct it or just ignore for now if risky.
-    // But user asked for discard.
-    // Let's try to construct it.
-    // Actually, backend `delete_recording_command` takes a path.
-    // If we can't reliably get the path, we can't delete.
-    // Let's skip deletion for this iteration to be safe, or try best effort.
-    // Better: Update backend to return full path.
-    // But I already updated backend to return folder.
-    // Let's just reset state for now.
+  const handleReviewExit = () => {
     resetState();
   };
 
@@ -128,7 +122,8 @@ function App() {
     setSelectedPid(null);
     setFilename('');
     setMicDevice(null);
-    setRecordedPath('');
+    setRecordedFilePath('');
+    setRecordedFolderPath('');
     setIsPaused(false);
   };
 
@@ -186,7 +181,7 @@ function App() {
         {step === 'review' && (
           <ReviewScreen
             initialFilename={filename}
-            filePath={recordedPath}
+            filePath={recordedFilePath}
             onSave={handleSave}
             onDiscard={handleDiscard}
             onExit={handleReviewExit}

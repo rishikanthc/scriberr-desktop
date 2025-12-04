@@ -1,48 +1,57 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, Trash2 } from 'lucide-react';
 
 interface ReviewScreenProps {
     initialFilename: string;
     filePath: string;
     onSave: () => Promise<void>;
-    onDiscard: () => void;
+    onDiscard: () => Promise<void>;
     onExit: () => void;
 }
 
 export function ReviewScreen({ initialFilename, filePath, onSave, onDiscard, onExit }: ReviewScreenProps) {
     const [filename, setFilename] = useState(initialFilename);
-    const [status, setStatus] = useState<'idle' | 'saving' | 'success'>('idle');
+    const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'discarding' | 'discarded'>('idle');
 
     const handleSave = async () => {
         setStatus('saving');
-        // Simulate a small delay for better UX if operation is too fast
         const minTime = new Promise(resolve => setTimeout(resolve, 800));
 
         try {
             await Promise.all([onSave(), minTime]);
-            setStatus('success');
+            setStatus('saved');
 
-            // Wait for success animation then exit
             setTimeout(() => {
                 onExit();
             }, 1500);
         } catch (error) {
             console.error("Save failed:", error);
-            // If it fails (e.g. opening folder failed), we should probably still let the user exit or try again.
-            // For now, let's just go to success/exit so they aren't stuck, 
-            // or maybe revert to idle?
-            // Reverting to idle lets them try again.
             setStatus('idle');
-            // Maybe show an alert?
-            // alert("Failed to open folder, but recording is saved.");
+        }
+    };
+
+    const handleDiscard = async () => {
+        setStatus('discarding');
+        const minTime = new Promise(resolve => setTimeout(resolve, 800));
+
+        try {
+            await Promise.all([onDiscard(), minTime]);
+            setStatus('discarded');
+
+            setTimeout(() => {
+                onExit();
+            }, 1500);
+        } catch (error) {
+            console.error("Discard failed:", error);
+            setStatus('idle');
         }
     };
 
     return (
         <div className="flex flex-col h-full gap-6 relative">
             <AnimatePresence>
-                {status === 'success' && (
+                {status === 'saved' && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -67,6 +76,32 @@ export function ReviewScreen({ initialFilename, filePath, onSave, onDiscard, onE
                         </motion.p>
                     </motion.div>
                 )}
+
+                {status === 'discarded' && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-neutral-900/80 backdrop-blur-md rounded-xl"
+                    >
+                        <motion.div
+                            initial={{ scale: 0, rotate: 180 }}
+                            animate={{ scale: 1, rotate: 0 }}
+                            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                            className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/30 mb-4"
+                        >
+                            <Trash2 size={32} className="text-white" strokeWidth={3} />
+                        </motion.div>
+                        <motion.p
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                            className="text-white font-medium text-lg"
+                        >
+                            Recording Discarded
+                        </motion.p>
+                    </motion.div>
+                )}
             </AnimatePresence>
 
             <div className="text-center">
@@ -87,11 +122,18 @@ export function ReviewScreen({ initialFilename, filePath, onSave, onDiscard, onE
 
             <div className="mt-auto flex gap-3">
                 <button
-                    onClick={onDiscard}
+                    onClick={handleDiscard}
                     disabled={status !== 'idle'}
-                    className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-medium rounded-xl py-3 transition-all active:scale-[0.98] backdrop-blur-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-medium rounded-xl py-3 transition-all active:scale-[0.98] backdrop-blur-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                    Discard
+                    {status === 'discarding' ? (
+                        <>
+                            <Loader2 size={18} className="animate-spin" />
+                            <span>Discarding...</span>
+                        </>
+                    ) : (
+                        <span>Discard</span>
+                    )}
                 </button>
                 <button
                     onClick={handleSave}

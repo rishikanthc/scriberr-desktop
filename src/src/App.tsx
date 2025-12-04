@@ -5,6 +5,7 @@ import { AppSelector } from './components/AppSelector';
 import { Controls } from './components/Controls';
 import { Timer } from './components/Timer';
 import { MicSelector } from './components/MicSelector';
+import logo from './assets/logo.svg';
 
 function App() {
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
@@ -46,9 +47,6 @@ function App() {
       setIsRecording(false);
       setIsPaused(false);
       if (folderPath) {
-        // Open the folder using the 'open' command (requires 'open' crate or similar, 
-        // but we can use tauri's shell open if allowed, or just rely on user knowing location.
-        // Actually, let's use the 'opener' plugin we added!)
         await invoke('plugin:opener|open_path', { path: folderPath });
       }
     } catch (error) {
@@ -66,15 +64,15 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-stone-500/70 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden flex flex-col text-white select-none">
+    <div className="h-screen w-screen bg-stone-500/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
       <TitleBar />
 
       <div className="flex-1 flex flex-col p-6 gap-6">
-        <div className="text-center">
-          <h1 className="text-lg font-semibold bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
-            Scriberr Companion
-          </h1>
-          <p className="text-xs text-white/40 mt-1">Select an app to record audio</p>
+        <div className="flex flex-col items-center justify-center gap-1">
+          <img src={logo} alt="Scriberr" className="h-8 w-auto opacity-90" />
+          <span className="text-[10px] font-bold tracking-[0.3em] text-white/40 font-sans">
+            COMPANION
+          </span>
         </div>
 
         <div className="flex-1 flex flex-col justify-center gap-8">
@@ -91,7 +89,7 @@ function App() {
           <div className="px-4">
             <MicSelector
               onSelect={(name) => invoke('switch_microphone_command', { deviceName: name })}
-              disabled={false} // Always allow switching? Yes.
+              disabled={false}
             />
           </div>
 

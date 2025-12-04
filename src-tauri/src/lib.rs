@@ -174,7 +174,7 @@ fn save_ledger(entries: &Vec<LedgerEntry>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn add_recording_command(file_path: String) -> Result<LedgerEntry, String> {
+async fn add_recording_command(file_path: String, app_handle: AppHandle) -> Result<LedgerEntry, String> {
     let mut entries = load_ledger();
     
     let entry = LedgerEntry {
@@ -190,6 +190,11 @@ async fn add_recording_command(file_path: String) -> Result<LedgerEntry, String>
     entries.insert(0, entry.clone());
     
     save_ledger(&entries)?;
+
+    // Emit event
+    use tauri::Emitter;
+    let _ = app_handle.emit("recording-added", &entry);
+
     Ok(entry)
 }
 

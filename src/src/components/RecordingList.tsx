@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { FileAudio, CheckCircle, AlertCircle, Clock, Trash2, UploadCloud, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -37,6 +38,14 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 
     useEffect(() => {
         fetchRecordings();
+
+        const unlistenPromise = listen<LedgerEntry>('recording-added', (event) => {
+            setRecordings(prev => [event.payload, ...prev]);
+        });
+
+        return () => {
+            unlistenPromise.then(unlisten => unlisten());
+        };
     }, []);
 
     // Close context menu on global click

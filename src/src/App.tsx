@@ -11,12 +11,13 @@ import logo from './assets/logo.svg';
 import { Settings, FolderOpen, Folder } from 'lucide-react';
 import clsx from 'clsx';
 
+import { getAllWebviewWindows } from '@tauri-apps/api/webviewWindow';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+
 type AppStep = 'home' | 'setup' | 'recording' | 'review' | 'settings';
-type HomeView = 'apps' | 'recordings';
 
 function App() {
   const [step, setStep] = useState<AppStep>('home');
-  const [homeView, setHomeView] = useState<HomeView>('apps');
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
   const [filename, setFilename] = useState('');
   const [micDevice, setMicDevice] = useState<string | null>(null);
@@ -153,7 +154,19 @@ function App() {
 
   const handleReviewExit = () => {
     resetState();
-    setHomeView('recordings'); // Switch to recordings view to show the new file
+    // setHomeView('recordings'); // No longer switching view
+    handleOpenRecordings();
+  };
+
+  const handleOpenRecordings = async () => {
+    const label = 'recordings';
+    const windows = await getAllWebviewWindows();
+    const existing = windows.find(w => w.label === label);
+
+    if (existing) {
+      await existing.show();
+      await existing.setFocus();
+    }
   };
 
   const resetState = () => {
@@ -182,19 +195,15 @@ function App() {
 
             <div className="flex-1 flex flex-col gap-4 overflow-hidden">
               <div className="flex-1 overflow-y-auto flex flex-col">
-                {homeView === 'apps' ? (
-                  <AppSelector
-                    selectedPid={selectedPid}
-                    onSelect={handleAppSelect}
-                    disabled={false}
-                  />
-                ) : (
-                  <RecordingList />
-                )}
+                <AppSelector
+                  selectedPid={selectedPid}
+                  onSelect={handleAppSelect}
+                  disabled={false}
+                />
               </div>
 
               <div className="mt-auto pt-2 flex items-center gap-3 justify-end">
-                {selectedPid && homeView === 'apps' && (
+                {selectedPid && (
                   <button
                     onClick={handleNewRecordingClick}
                     className="flex-1 bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-medium rounded-xl py-3 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md"
@@ -205,14 +214,11 @@ function App() {
 
                 <div className="flex items-center gap-2 ml-auto">
                   <button
-                    onClick={() => setHomeView(v => v === 'apps' ? 'recordings' : 'apps')}
-                    className={clsx(
-                      "text-white/40 hover:text-white/90 transition-colors p-2 rounded-lg",
-                      homeView === 'recordings' && "text-white bg-white/10"
-                    )}
+                    onClick={handleOpenRecordings}
+                    className="text-white/40 hover:text-white/90 transition-colors p-2 rounded-lg"
                     title="Recordings"
                   >
-                    {homeView === 'recordings' ? <FolderOpen size={20} /> : <Folder size={20} />}
+                    <Folder size={20} />
                   </button>
 
                   <button

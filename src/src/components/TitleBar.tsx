@@ -3,11 +3,16 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 
 interface TitleBarProps {
     isConnected: boolean;
+    onClose?: () => void;
 }
 
-export function TitleBar({ isConnected }: TitleBarProps) {
+export function TitleBar({ isConnected, onClose }: TitleBarProps) {
     const closeWindow = async () => {
-        await getCurrentWindow().hide();
+        if (onClose) {
+            onClose();
+        } else {
+            await getCurrentWindow().hide();
+        }
     };
 
     return (

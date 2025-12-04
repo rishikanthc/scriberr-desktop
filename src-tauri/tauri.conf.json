@@ -21,7 +21,20 @@
         "transparent": true,
         "visible": false,
         "resizable": false,
-        "alwaysOnTop": true
+        "alwaysOnTop": true,
+        "label": "main"
+      },
+      {
+        "title": "Recordings",
+        "width": 900,
+        "height": 800,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "resizable": true,
+        "alwaysOnTop": false,
+        "label": "recordings",
+        "url": "/"
       }
     ],
     "trayIcon": {

@@ -18,6 +18,8 @@ interface RecordingListProps {
 export function RecordingList({ onSelect }: RecordingListProps) {
     const [recordings, setRecordings] = useState<LedgerEntry[]>([]);
     const [loading, setLoading] = useState(false);
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string } | null>(null);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
 
     const fetchRecordings = async () => {
         setLoading(true);
@@ -35,22 +37,41 @@ export function RecordingList({ onSelect }: RecordingListProps) {
         fetchRecordings();
     }, []);
 
-    const handleDelete = async (id: string, e: React.MouseEvent) => {
+    // Close context menu on global click
+    useEffect(() => {
+        const handleClick = () => setContextMenu(null);
+        window.addEventListener('click', handleClick);
+        return () => window.removeEventListener('click', handleClick);
+    }, []);
+
+    const handleContextMenu = (e: React.MouseEvent, id: string) => {
         e.preventDefault();
         e.stopPropagation();
+        // Adjust coordinates if near edges (simple clamp for now or just render)
+        // Since window is small, let's just use client coordinates.
+        setContextMenu({ x: e.clientX, y: e.clientY, id });
+    };
 
-        // Confirm deletion? Maybe just do it for now as requested "right click to delete"
-        // But right click usually opens context menu.
-        // User said: "i should be able to right click on a recording to delete"
-        // I'll implement a custom context menu or just delete on right click (with maybe a small confirmation or just immediate action).
-        // Immediate action on right click is a bit aggressive but fits "simple".
-        // Let's prevent default context menu and delete.
+    const handleDeleteClick = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent closing immediately from global listener?
+        // Actually global listener closes it, which is fine.
+        // But we need to set deleteId.
+        if (contextMenu) {
+            setDeleteId(contextMenu.id);
+            setContextMenu(null);
+        }
+    };
 
-        try {
-            await invoke('delete_recording_entry_command', { id });
-            setRecordings(prev => prev.filter(r => r.id !== id));
-        } catch (error) {
-            console.error('Failed to delete recording:', error);
+    const confirmDelete = async () => {
+        if (deleteId) {
+            try {
+                await invoke('delete_recording_entry_command', { id: deleteId });
+                setRecordings(prev => prev.filter(r => r.id !== deleteId));
+            } catch (error) {
+                console.error('Failed to delete recording:', error);
+            } finally {
+                setDeleteId(null);
+            }
         }
     };
 
@@ -83,7 +104,7 @@ export function RecordingList({ onSelect }: RecordingListProps) {
     };
 
     return (
-        <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex flex-col h-full overflow-hidden relative">
             <div className="flex items-center justify-between px-2 mb-2 shrink-0">
                 <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Recordings</span>
                 <button
@@ -102,9 +123,8 @@ export function RecordingList({ onSelect }: RecordingListProps) {
                 {recordings.map((rec) => (
                     <div
                         key={rec.id}
-                        onContextMenu={(e) => handleDelete(rec.id, e)}
+                        onContextMenu={(e) => handleContextMenu(e, rec.id)}
                         className="group flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all cursor-default select-none relative"
-                        title="Right-click to delete"
                     >
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/20 to-blue-500/20 flex items-center justify-center border border-white/10 shrink-0">
                             <FileAudio size={16} className="text-white/80" />
@@ -123,6 +143,49 @@ export function RecordingList({ onSelect }: RecordingListProps) {
                     </div>
                 ))}
             </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div
+                    className="fixed z-50 bg-neutral-800 border border-white/10 rounded-lg shadow-xl py-1 min-w-[120px] backdrop-blur-md"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        onClick={handleDeleteClick}
+                        className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-white/5 flex items-center gap-2 transition-colors"
+                    >
+                        <Trash2 size={14} />
+                        Delete
+                    </button>
+                </div>
+            )}
+
+            {/* Confirmation Dialog */}
+            {deleteId && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+                    <div className="bg-neutral-900 border border-white/10 rounded-xl p-4 w-full shadow-2xl flex flex-col gap-3">
+                        <div className="text-center">
+                            <h3 className="text-white font-medium text-sm">Delete Recording?</h3>
+                            <p className="text-white/50 text-[10px] mt-1">This action cannot be undone.</p>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                            <button
+                                onClick={() => setDeleteId(null)}
+                                className="flex-1 bg-white/5 hover:bg-white/10 text-white/80 py-2 rounded-lg text-xs font-medium transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 py-2 rounded-lg text-xs font-medium transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

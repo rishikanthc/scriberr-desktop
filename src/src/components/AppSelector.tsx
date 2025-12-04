@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
-import { Monitor, RefreshCw } from 'lucide-react';
+import { Monitor, RefreshCw, Mic } from 'lucide-react';
 import clsx from 'clsx';
 
 interface RunnableApp {
@@ -40,7 +40,7 @@ export function AppSelector({ onSelect, selectedPid, disabled }: AppSelectorProp
     return (
         <div className="flex flex-col gap-2 w-full">
             <div className="flex items-center justify-between px-2">
-                <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Select App</span>
+                <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Select Source</span>
                 <button
                     onClick={fetchApps}
                     disabled={loading || disabled}
@@ -51,6 +51,28 @@ export function AppSelector({ onSelect, selectedPid, disabled }: AppSelectorProp
             </div>
 
             <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                {/* Microphone Option */}
+                <motion.button
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => onSelect(-1)}
+                    disabled={disabled}
+                    className={clsx(
+                        "flex items-center gap-3 p-3 rounded-xl text-left transition-all border mb-2",
+                        selectedPid === -1
+                            ? "bg-white/10 border-white/20 shadow-lg backdrop-blur-md ring-1 ring-white/10"
+                            : "bg-transparent border-transparent hover:bg-white/5 text-white/60 hover:text-white"
+                    )}
+                >
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center border border-white/10">
+                        <Mic size={16} className="text-white/80" />
+                    </div>
+                    <div className="flex flex-col overflow-hidden">
+                        <span className="text-sm font-medium truncate">Microphone</span>
+                        <span className="text-[10px] text-white/40">Record Input Only</span>
+                    </div>
+                </motion.button>
+
                 {apps.length === 0 && !loading && (
                     <div className="text-center py-4 text-white/30 text-sm">No meeting apps found</div>
                 )}

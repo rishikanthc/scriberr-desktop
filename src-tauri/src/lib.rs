@@ -6,11 +6,10 @@ use tokio::sync::Mutex;
 use std::sync::Arc;
 use std::path::PathBuf;
 use tauri::{
-    menu::{Menu, MenuItem, Submenu, PredefinedMenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Manager, AppHandle, Emitter,
+    Manager, AppHandle,
 };
-use tauri_plugin_dialog::DialogExt;
 use recorder::AudioRecorder;
 
 struct AppState {

@@ -37,7 +37,7 @@ function App() {
   };
 
   const handleStartRecording = async (name: string, mic: string | null) => {
-    if (!selectedPid) return;
+    if (selectedPid === null) return;
     try {
       setFilename(name);
       setMicDevice(mic);
@@ -166,6 +166,7 @@ function App() {
           <SetupScreen
             onStart={handleStartRecording}
             onBack={() => setStep('home')}
+            includeNone={selectedPid !== -1}
           />
         )}
 

@@ -9,11 +9,12 @@ use screencapturekit::cm_sample_buffer::CMSampleBuffer;
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use hound::{WavWriter, WavSpec};
-use ringbuf::{HeapProducer, HeapRb};
+use ringbuf::HeapProducer;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::mixer::AudioMixer;
 
+#[allow(dead_code)]
 struct SendStream(cpal::Stream);
 unsafe impl Send for SendStream {}
 
@@ -138,7 +139,14 @@ impl AudioRecorder {
         self.writer = writer_arc.clone();
 
         // 2. Setup Mixer
-        let (mixer, sys_prod, mic_prod, running) = AudioMixer::new(writer_arc.clone());
+        let sys_enabled = pid != -1;
+        let mic_enabled = if let Some(ref device_name) = mic_device_name {
+            device_name != "None"
+        } else {
+            false
+        };
+
+        let (mixer, sys_prod, mic_prod, running) = AudioMixer::new(writer_arc.clone(), sys_enabled, mic_enabled);
         *self.mixer.lock().unwrap() = Some(mixer);
         self.mixer_running = running;
         
@@ -153,8 +161,8 @@ impl AudioRecorder {
         });
 
         // 3. Setup Microphone (if requested)
-        if let Some(device_name) = mic_device_name {
-            if device_name != "None" {
+        if mic_enabled {
+            if let Some(device_name) = mic_device_name {
                  let mic_prod_mutex = Arc::new(Mutex::new(mic_prod));
                 *self.mic_producer.lock().unwrap() = Some(mic_prod_mutex.clone());
 
@@ -207,31 +215,33 @@ impl AudioRecorder {
             }
         }
 
-        // 4. Setup System Audio (SCK)
-        let content = SCShareableContent::current();
-        let window = content.windows.into_iter()
-            .find(|w| w.owning_application.as_ref().map(|a| a.process_id).unwrap_or(0) == pid)
-            .ok_or("No window found for target app")?;
+        // 4. Setup System Audio (SCK) - Only if enabled
+        if sys_enabled {
+            let content = SCShareableContent::current();
+            let window = content.windows.into_iter()
+                .find(|w| w.owning_application.as_ref().map(|a| a.process_id).unwrap_or(0) == pid)
+                .ok_or("No window found for target app")?;
 
-        let filter = SCContentFilter::new(InitParams::DesktopIndependentWindow(window));
-        let mut sc_config = SCStreamConfiguration::from_size(100, 100, false);
-        sc_config.captures_audio = true;
-        sc_config.excludes_current_process_audio = false;
-        // Ensure 48kHz? SCK usually defaults to it.
+            let filter = SCContentFilter::new(InitParams::DesktopIndependentWindow(window));
+            let mut sc_config = SCStreamConfiguration::from_size(100, 100, false);
+            sc_config.captures_audio = true;
+            sc_config.excludes_current_process_audio = false;
+            // Ensure 48kHz? SCK usually defaults to it.
 
-        let sys_prod_mutex = Arc::new(Mutex::new(sys_prod));
-        
-        let mut stream = SCStream::new(filter, sc_config, ErrorHandler);
-        
-        let output_wrapper = OutputWrapper {
-            producer: sys_prod_mutex,
-            paused: self.paused.clone(),
-        };
-        
-        stream.add_output(output_wrapper, SCStreamOutputType::Audio);
+            let sys_prod_mutex = Arc::new(Mutex::new(sys_prod));
+            
+            let mut stream = SCStream::new(filter, sc_config, ErrorHandler);
+            
+            let output_wrapper = OutputWrapper {
+                producer: sys_prod_mutex,
+                paused: self.paused.clone(),
+            };
+            
+            stream.add_output(output_wrapper, SCStreamOutputType::Audio);
 
-        stream.start_capture().map_err(|e| format!("Failed to start capture: {:?}", e))?;
-        self.stream = Some(stream);
+            stream.start_capture().map_err(|e| format!("Failed to start capture: {:?}", e))?;
+            self.stream = Some(stream);
+        }
 
         Ok(())
     }
@@ -308,6 +318,7 @@ impl StreamOutput for OutputWrapper {
             }
 
             #[repr(C)]
+            #[allow(non_snake_case)]
             struct AudioStreamBasicDescription {
                 pub mSampleRate: f64,
                 pub mFormatID: u32,

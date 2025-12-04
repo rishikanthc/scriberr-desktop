@@ -6,16 +6,17 @@ import logo from '../assets/logo.svg';
 interface SetupScreenProps {
     onStart: (filename: string, micDevice: string | null) => void;
     onBack: () => void;
+    includeNone?: boolean;
 }
 
-export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
+export function SetupScreen({ onStart, onBack, includeNone = true }: SetupScreenProps) {
     const [filename, setFilename] = useState('');
     const [micDevice, setMicDevice] = useState<string | null>('Default');
 
     useEffect(() => {
         const now = new Date();
         const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        setFilename(`recording_${timestamp}`);
+        setFilename(`recording_${timestamp} `);
     }, []);
 
     return (
@@ -47,7 +48,7 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
                     <MicSelector
                         onSelect={(name) => setMicDevice(name)}
                         disabled={false}
-                        includeNone={true}
+                        includeNone={includeNone}
                     />
                 </div>
 

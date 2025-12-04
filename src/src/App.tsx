@@ -66,7 +66,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-black/60 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden flex flex-col text-white select-none">
+    <div className="h-screen w-screen bg-stone-500/70 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden flex flex-col text-white select-none">
       <TitleBar />
 
       <div className="flex-1 flex flex-col p-6 gap-6">

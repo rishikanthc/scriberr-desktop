@@ -6,14 +6,17 @@ import { SetupScreen } from './components/SetupScreen';
 import { RecordingScreen } from './components/RecordingScreen';
 import { ReviewScreen } from './components/ReviewScreen';
 import { SettingsScreen } from './components/SettingsScreen';
+import { RecordingList } from './components/RecordingList';
 import logo from './assets/logo.svg';
-import { Settings } from 'lucide-react';
+import { Settings, FolderOpen, Folder } from 'lucide-react';
 import clsx from 'clsx';
 
 type AppStep = 'home' | 'setup' | 'recording' | 'review' | 'settings';
+type HomeView = 'apps' | 'recordings';
 
 function App() {
   const [step, setStep] = useState<AppStep>('home');
+  const [homeView, setHomeView] = useState<HomeView>('apps');
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
   const [filename, setFilename] = useState('');
   const [micDevice, setMicDevice] = useState<string | null>(null);
@@ -115,14 +118,26 @@ function App() {
   };
 
   const handleSave = async () => {
-    // Open folder
+    // Add to ledger
+    if (recordedFilePath) {
+      try {
+        await invoke('add_recording_command', { filePath: recordedFilePath });
+      } catch (e) {
+        console.error("Failed to add to ledger:", e);
+      }
+    }
+
+    // Open folder (optional, maybe user doesn't want this every time now that we have a browser? 
+    // But user didn't say to remove it. "When an audio record is 'saved' (user presses save), you will create an entry")
+    // I'll keep the folder opening for now as it's useful feedback.
     if (recordedFolderPath) {
-      // Fire and forget to prevent blocking the UI if opener hangs
       invoke('plugin:opener|open_path', { path: recordedFolderPath }).catch(e => {
         console.error("Failed to open path:", e);
       });
     }
-    // Do not reset state here, let ReviewScreen handle it after animation
+
+    // Reset state handled by ReviewScreen exit or we can force it here?
+    // ReviewScreen calls onExit after animation.
   };
 
   const handleDiscard = async () => {
@@ -138,6 +153,7 @@ function App() {
 
   const handleReviewExit = () => {
     resetState();
+    setHomeView('recordings'); // Switch to recordings view to show the new file
   };
 
   const resetState = () => {
@@ -165,16 +181,20 @@ function App() {
             </div>
 
             <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-              <div className="flex-1 overflow-y-auto">
-                <AppSelector
-                  selectedPid={selectedPid}
-                  onSelect={handleAppSelect}
-                  disabled={false}
-                />
+              <div className="flex-1 overflow-y-auto flex flex-col">
+                {homeView === 'apps' ? (
+                  <AppSelector
+                    selectedPid={selectedPid}
+                    onSelect={handleAppSelect}
+                    disabled={false}
+                  />
+                ) : (
+                  <RecordingList />
+                )}
               </div>
 
               <div className="mt-auto pt-3 flex items-center gap-3 justify-end">
-                {selectedPid && (
+                {selectedPid && homeView === 'apps' && (
                   <button
                     onClick={handleNewRecordingClick}
                     className="flex-1 bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-medium rounded-xl py-3 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md"
@@ -183,13 +203,26 @@ function App() {
                   </button>
                 )}
 
-                <button
-                  onClick={() => setStep('settings')}
-                  className="text-white/40 hover:text-white/90 transition-colors p-2 rounded-lg"
-                  title="Settings"
-                >
-                  <Settings size={20} />
-                </button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={() => setHomeView(v => v === 'apps' ? 'recordings' : 'apps')}
+                    className={clsx(
+                      "text-white/40 hover:text-white/90 transition-colors p-2 rounded-lg",
+                      homeView === 'recordings' && "text-white bg-white/10"
+                    )}
+                    title="Recordings"
+                  >
+                    {homeView === 'recordings' ? <FolderOpen size={20} /> : <Folder size={20} />}
+                  </button>
+
+                  <button
+                    onClick={() => setStep('settings')}
+                    className="text-white/40 hover:text-white/90 transition-colors p-2 rounded-lg"
+                    title="Settings"
+                  >
+                    <Settings size={20} />
+                  </button>
+                </div>
               </div>
             </div>
           </>

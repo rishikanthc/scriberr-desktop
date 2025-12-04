@@ -113,6 +113,107 @@ struct Settings {
     api_key: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+struct LedgerEntry {
+    id: String,
+    file_path: String,
+    upload_status: String, // "incomplete", "uploaded", "failed"
+    created_at: String,
+    retry_count: u32,
+}
+
+fn get_ledger_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home).join(".config").join("scriberr-companion").join("ledger.json")
+}
+
+fn get_ledger_tmp_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home).join(".config").join("scriberr-companion").join("ledger.json.tmp")
+}
+
+fn load_ledger() -> Vec<LedgerEntry> {
+    let path = get_ledger_path();
+    let tmp_path = get_ledger_tmp_path();
+
+    // Recovery: If tmp exists, it means previous write failed or crashed. 
+    // Assume tmp is the intended new state.
+    if tmp_path.exists() {
+        let _ = std::fs::rename(&tmp_path, &path);
+    }
+
+    if !path.exists() {
+        return Vec::new();
+    }
+
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    serde_json::from_str(&content).unwrap_or_default()
+}
+
+fn save_ledger(entries: &Vec<LedgerEntry>) -> Result<(), String> {
+    let path = get_ledger_path();
+    let tmp_path = get_ledger_tmp_path();
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    let json = serde_json::to_string_pretty(entries).map_err(|e| e.to_string())?;
+    
+    // Atomic write: Write to tmp, then rename
+    std::fs::write(&tmp_path, json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn add_recording_command(file_path: String) -> Result<LedgerEntry, String> {
+    let mut entries = load_ledger();
+    
+    let entry = LedgerEntry {
+        id: uuid::Uuid::new_v4().to_string(),
+        file_path: file_path.clone(),
+        upload_status: "incomplete".to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        retry_count: 0,
+    };
+    
+    // Prepend to list (newest first)
+    entries.insert(0, entry.clone());
+    
+    save_ledger(&entries)?;
+    Ok(entry)
+}
+
+#[tauri::command]
+async fn get_recordings_command() -> Result<Vec<LedgerEntry>, String> {
+    Ok(load_ledger())
+}
+
+#[tauri::command]
+async fn delete_recording_entry_command(id: String) -> Result<(), String> {
+    let mut entries = load_ledger();
+    
+    if let Some(index) = entries.iter().position(|e| e.id == id) {
+        let entry = &entries[index];
+        // Try to delete file
+        let path = PathBuf::from(&entry.file_path);
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
+        
+        entries.remove(index);
+        save_ledger(&entries)?;
+    }
+    
+    Ok(())
+}
+
 #[tauri::command]
 async fn check_connection_command(url: String, api_key: String) -> Result<bool, String> {
     let client = reqwest::Client::new();
@@ -177,7 +278,10 @@ pub fn run() {
             delete_recording_command,
             check_connection_command,
             save_settings_command,
-            load_settings_command
+            load_settings_command,
+            add_recording_command,
+            get_recordings_command,
+            delete_recording_entry_command
         ])
         .setup(|app| {
             let documents_dir = app.path().document_dir().unwrap_or(PathBuf::from("/"));

@@ -24,8 +24,8 @@ export function Controls({ isRecording, isPaused, onStart, onStop, onPause, onRe
                     className={clsx(
                         "w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all",
                         disabled
-                            ? "bg-white/10 cursor-not-allowed opacity-50"
-                            : "bg-red-500 hover:bg-red-400 text-white shadow-red-500/20"
+                            ? "bg-white/5 cursor-not-allowed opacity-30"
+                            : "bg-white/10 hover:bg-white/20 text-red-400 border border-white/10 shadow-lg backdrop-blur-md"
                     )}
                 >
                     <Mic size={24} fill="currentColor" />

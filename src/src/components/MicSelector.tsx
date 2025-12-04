@@ -54,7 +54,7 @@ export function MicSelector({ onSelect, disabled, includeNone = false }: MicSele
             <button
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
-                className={`w-full flex items-center justify-between bg-white/10 border border-white/10 rounded-lg px-4 py-3 text-sm text-white transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'
+                className={`w-full flex items-center justify-between bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white transition-all backdrop-blur-sm ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-black/30'
                     }`}
             >
                 <div className="flex items-center gap-2 truncate">
@@ -87,15 +87,15 @@ export function MicSelector({ onSelect, disabled, includeNone = false }: MicSele
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="absolute z-50 w-full mt-2 bg-neutral-900 border border-white/10 rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto"
+                        className="absolute z-50 w-full mt-2 bg-neutral-900/90 border border-white/10 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto backdrop-blur-md"
                     >
                         {mics.map((mic) => (
                             <button
                                 key={mic.id}
                                 onClick={() => handleSelect(mic.id)}
-                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${selectedMic === mic.id
-                                        ? 'bg-white/20 text-white'
-                                        : 'text-white/60 hover:bg-white/10 hover:text-white'
+                                className={`w-full text-left px-4 py-3 text-sm transition-colors ${selectedMic === mic.id
+                                        ? 'bg-white/10 text-white'
+                                        : 'text-white/60 hover:bg-white/5 hover:text-white'
                                     }`}
                             >
                                 {mic.name}

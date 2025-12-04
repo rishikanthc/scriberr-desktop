@@ -96,8 +96,15 @@ function App() {
   const handleSave = async () => {
     // Open folder
     if (recordedPath) {
-      await invoke('plugin:opener|open_path', { path: recordedPath });
+      // Fire and forget to prevent blocking the UI if opener hangs
+      invoke('plugin:opener|open_path', { path: recordedPath }).catch(e => {
+        console.error("Failed to open path:", e);
+      });
     }
+    // Do not reset state here, let ReviewScreen handle it after animation
+  };
+
+  const handleReviewExit = () => {
     resetState();
   };
 
@@ -133,7 +140,7 @@ function App() {
         {step === 'home' && (
           <>
             <div className="flex flex-col items-center justify-center gap-1 mb-6">
-              <img src={logo} alt="Scriberr" className="h-8 w-auto opacity-90" />
+              <img src={logo} alt="Scriberr" className="h-8 w-auto opacity-100" />
               <span className="text-[10px] font-bold tracking-[0.3em] text-white/40 font-sans">
                 COMPANION
               </span>
@@ -151,7 +158,7 @@ function App() {
               {selectedPid && (
                 <button
                   onClick={handleNewRecordingClick}
-                  className="w-full bg-white text-black font-semibold rounded-xl py-4 hover:bg-white/90 transition-all active:scale-[0.98] shadow-lg shadow-white/10"
+                  className="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white font-medium rounded-xl py-4 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md"
                 >
                   New Recording
                 </button>
@@ -182,6 +189,7 @@ function App() {
             filePath={recordedPath}
             onSave={handleSave}
             onDiscard={handleDiscard}
+            onExit={handleReviewExit}
           />
         )}
       </div>

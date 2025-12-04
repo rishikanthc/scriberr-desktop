@@ -36,7 +36,7 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
                         type="text"
                         value={filename}
                         onChange={(e) => setFilename(e.target.value)}
-                        className="bg-white/10 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
+                        className="bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-white/20 focus:bg-black/30 transition-all backdrop-blur-sm"
                         placeholder="Enter filename..."
                         autoFocus
                     />
@@ -54,7 +54,7 @@ export function SetupScreen({ onStart, onBack }: SetupScreenProps) {
                 <div className="mt-auto">
                     <button
                         onClick={() => onStart(filename, micDevice)}
-                        className="w-full bg-white text-black font-semibold rounded-xl py-4 hover:bg-white/90 transition-all active:scale-[0.98] shadow-lg shadow-white/10"
+                        className="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white font-medium rounded-xl py-4 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md"
                     >
                         Start Recording
                     </button>

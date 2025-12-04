@@ -243,7 +243,11 @@ impl AudioRecorder {
         // Stop System Audio
         if let Some(stream) = &self.stream {
             if let Err(e) = stream.stop_capture() {
-                eprintln!("Warning: Failed to stop capture: {:?}", e);
+                // Ignore "already stopped" error
+                let msg = format!("{:?}", e);
+                if !msg.contains("already stopped") && !msg.contains("does not exist") {
+                     eprintln!("Warning: Failed to stop capture: {:?}", e);
+                }
             }
         }
         self.stream = None;

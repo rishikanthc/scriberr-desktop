@@ -65,8 +65,8 @@ export function AppSelector({ onSelect, selectedPid, disabled }: AppSelectorProp
                         className={clsx(
                             "flex items-center gap-3 p-3 rounded-xl text-left transition-all border",
                             selectedPid === app.pid
-                                ? "bg-white/10 border-white/20 shadow-lg backdrop-blur-md"
-                                : "bg-transparent border-transparent hover:bg-white/5 text-white/70 hover:text-white"
+                                ? "bg-white/10 border-white/20 shadow-lg backdrop-blur-md ring-1 ring-white/10"
+                                : "bg-transparent border-transparent hover:bg-white/5 text-white/60 hover:text-white"
                         )}
                     >
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-white/10">

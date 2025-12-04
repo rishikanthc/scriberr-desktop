@@ -7,7 +7,7 @@ export function TitleBar() {
     };
 
     return (
-        <div data-tauri-drag-region className="h-10 flex items-center justify-end px-4 cursor-grab active:cursor-grabbing">
+        <div data-tauri-drag-region className="h-10 flex items-center justify-end px-4 cursor-grab active:cursor-grabbing w-full">
             <button
                 onClick={closeWindow}
                 className="text-white/50 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10"

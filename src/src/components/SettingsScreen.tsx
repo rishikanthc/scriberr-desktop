@@ -141,7 +141,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
     return (
         <div className="flex flex-col h-full overflow-hidden">
             {/* Header */}
-            <div className="flex items-center gap-2 mb-4 shrink-0">
+            <div className="flex items-center gap-2 mb-2 shrink-0">
                 <button
                     onClick={onBack}
                     className="text-white/60 hover:text-white transition-colors p-1 -ml-1 rounded-lg hover:bg-white/10"

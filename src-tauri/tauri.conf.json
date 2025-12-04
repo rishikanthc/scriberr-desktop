@@ -15,8 +15,8 @@
     "windows": [
       {
         "title": "Scriberr Companion",
-        "width": 320,
-        "height": 450,
+        "width": 340,
+        "height": 480,
         "decorations": false,
         "transparent": true,
         "visible": false,

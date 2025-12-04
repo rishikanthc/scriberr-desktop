@@ -170,10 +170,10 @@ function App() {
     <div className="h-screen w-screen bg-neutral-700/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
       <TitleBar isConnected={isConnected} />
 
-      <div className="flex-1 flex flex-col p-6 overflow-hidden">
+      <div className="flex-1 flex flex-col px-5 pb-3 pt-0.5 overflow-hidden">
         {step === 'home' && (
           <>
-            <div className="flex flex-col items-center justify-center gap-1 mb-6">
+            <div className="flex flex-col items-center justify-center gap-1 mb-4.5">
               <img src={logo} alt="Scriberr" className="h-6 w-auto opacity-100" />
               <span className="text-[8px] font-bold tracking-[0.3em] text-white/40 font-sans">
                 COMPANION
@@ -193,7 +193,7 @@ function App() {
                 )}
               </div>
 
-              <div className="mt-auto pt-3 flex items-center gap-3 justify-end">
+              <div className="mt-auto pt-2 flex items-center gap-3 justify-end">
                 {selectedPid && homeView === 'apps' && (
                   <button
                     onClick={handleNewRecordingClick}

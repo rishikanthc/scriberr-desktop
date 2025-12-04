@@ -338,6 +338,20 @@ async fn upload_recording_command(local_id: String) -> Result<LedgerEntry, Strin
     Ok(entry)
 }
 
+#[tauri::command]
+async fn check_file_exists_command(filename: String, app_handle: AppHandle) -> Result<bool, String> {
+    let state = app_handle.state::<AppState>();
+    let folder = state.output_folder.lock().await.clone();
+    // Check both with and without extension to be safe, or just normalize as we do in start
+    let name = if filename.to_lowercase().ends_with(".wav") { 
+        filename 
+    } else { 
+        format!("{}.wav", filename) 
+    };
+    let path = folder.join(name);
+    Ok(path.exists())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -359,7 +373,8 @@ pub fn run() {
             add_recording_command,
             get_recordings_command,
             delete_recording_entry_command,
-            upload_recording_command
+            upload_recording_command,
+            check_file_exists_command
         ])
         .setup(|app| {
             let documents_dir = app.path().document_dir().unwrap_or(PathBuf::from("/"));

@@ -7,7 +7,7 @@ import { RecordingScreen } from './components/RecordingScreen';
 import { ReviewScreen } from './components/ReviewScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { RecordingList } from './components/RecordingList';
-import logo from './assets/logo.svg';
+import { ConnectivityIndicator } from './components/ConnectivityIndicator';
 import { Settings, FolderOpen, Folder } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -181,17 +181,12 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-neutral-700/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
-      <TitleBar isConnected={isConnected} />
+      <TitleBar variant="home" />
 
       <div className="flex-1 flex flex-col px-5 pb-3 pt-0.5 overflow-hidden">
         {step === 'home' && (
           <>
-            <div className="flex flex-col items-center justify-center gap-1 mb-4.5">
-              <img src={logo} alt="Scriberr" className="h-6 w-auto opacity-100" />
-              <span className="text-[8px] font-bold tracking-[0.3em] text-white/40 font-sans">
-                COMPANION
-              </span>
-            </div>
+            {/* Logo removed */}
 
             <div className="flex-1 flex flex-col gap-4 overflow-hidden">
               <div className="flex-1 overflow-y-auto flex flex-col">
@@ -266,6 +261,10 @@ function App() {
             onBack={() => setStep('home')}
           />
         )}
+      </div>
+
+      <div className="absolute bottom-3 right-3 pointer-events-none">
+        <ConnectivityIndicator isConnected={isConnected} />
       </div>
     </div>
   );

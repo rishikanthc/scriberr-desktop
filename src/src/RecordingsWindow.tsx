@@ -9,7 +9,7 @@ export function RecordingsWindow() {
     };
 
     return (
-        <div className="h-screen w-screen bg-neutral-700/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none relative">
+        <div className="h-screen w-screen bg-neutral-700/85 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none relative">
             <TitleBar onClose={handleClose} />
 
             <div className="flex-1 flex flex-col px-6 pb-6 pt-2 overflow-hidden">

@@ -1,55 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, Suspense, lazy } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { TitleBar } from './components/TitleBar';
-import { AppSelector } from './components/AppSelector';
-import { SetupScreen } from './components/SetupScreen';
-import { RecordingScreen } from './components/RecordingScreen';
-import { ReviewScreen } from './components/ReviewScreen';
-import { SettingsScreen } from './components/SettingsScreen';
-import { RecordingList } from './components/RecordingList';
+import { AppSelector } from './features/recording/AppSelector';
 import { ConnectivityIndicator } from './components/ConnectivityIndicator';
-import { Settings, FolderOpen, Folder } from 'lucide-react';
-import clsx from 'clsx';
+import { Settings, Folder, Loader2 } from 'lucide-react';
+
 
 import { getAllWebviewWindows } from '@tauri-apps/api/webviewWindow';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+
+import { useConnectivity } from './features/settings/api/useSettings';
+import { useRecordingControls } from './features/recording/api/useRecordingControls';
 
 type AppStep = 'home' | 'setup' | 'recording' | 'review' | 'settings';
+
+// Lazy load screens
+const SetupScreen = lazy(() => import('./features/recording/SetupScreen').then(module => ({ default: module.SetupScreen })));
+const RecordingScreen = lazy(() => import('./features/recording/RecordingScreen').then(module => ({ default: module.RecordingScreen })));
+const ReviewScreen = lazy(() => import('./features/library/ReviewScreen').then(module => ({ default: module.ReviewScreen })));
+const SettingsScreen = lazy(() => import('./features/settings/SettingsScreen').then(module => ({ default: module.SettingsScreen })));
 
 function App() {
   const [step, setStep] = useState<AppStep>('home');
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
   const [filename, setFilename] = useState('');
-  const [micDevice, setMicDevice] = useState<string | null>(null);
   const [recordedFilePath, setRecordedFilePath] = useState('');
   const [recordedFolderPath, setRecordedFolderPath] = useState('');
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
 
-  useEffect(() => {
-    checkConnectivity();
-
-    // Periodic check every 30 seconds
-    const interval = setInterval(checkConnectivity, 30000);
-    return () => clearInterval(interval);
-  }, [step]); // Re-check when returning to home or changing steps
-
-  const checkConnectivity = async () => {
-    try {
-      const settings = await invoke<{ scriberr_url: string; api_key: string }>('load_settings_command');
-      if (settings.scriberr_url && settings.api_key) {
-        const connected = await invoke<boolean>('check_connection_command', {
-          url: settings.scriberr_url,
-          apiKey: settings.api_key
-        });
-        setIsConnected(connected);
-      } else {
-        setIsConnected(false);
-      }
-    } catch (e) {
-      setIsConnected(false);
-    }
-  };
+  const { data: isConnected = false } = useConnectivity();
+  const { start, pause, resume, stop, deleteRecording, addToLedger } = useRecordingControls();
 
   const handleAppSelect = (pid: number) => {
     if (selectedPid === pid) {
@@ -65,97 +45,80 @@ function App() {
     }
   };
 
-  const handleStartRecording = async (name: string, mic: string | null) => {
+  const handleStartRecording = (name: string, mic: string | null) => {
     if (selectedPid === null) return;
-    try {
-      setFilename(name);
-      setMicDevice(mic);
-      await invoke('start_recording_command', {
-        pid: selectedPid,
-        filename: name,
-        micDevice: mic
-      });
-      setStep('recording');
-      setIsPaused(false);
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-    }
-  };
-
-  const handlePause = async () => {
-    try {
-      await invoke('pause_recording_command');
-      setIsPaused(true);
-    } catch (error) {
-      console.error('Failed to pause:', error);
-    }
-  };
-
-  const handleResume = async () => {
-    try {
-      await invoke('resume_recording_command');
-      setIsPaused(false);
-    } catch (error) {
-      console.error('Failed to resume:', error);
-    }
-  };
-
-  const handleStop = async () => {
-    try {
-      interface RecordingResult {
-        file_path: string;
-        folder_path: string;
+    setFilename(name);
+    start.mutate({
+      pid: selectedPid,
+      filename: name,
+      micDevice: mic
+    }, {
+      onSuccess: () => {
+        setStep('recording');
+        setIsPaused(false);
+      },
+      onError: (error: Error) => {
+        console.error('Failed to start recording:', error);
       }
-      const result = await invoke<RecordingResult>('stop_recording_command');
+    });
+  };
 
-      setRecordedFilePath(result.file_path);
-      setRecordedFolderPath(result.folder_path);
+  const handlePause = () => {
+    pause.mutate(undefined, {
+      onSuccess: () => setIsPaused(true),
+      onError: (error: Error) => console.error('Failed to pause:', error)
+    });
+  };
 
-      setStep('review');
-      setIsPaused(false);
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-    }
+  const handleResume = () => {
+    resume.mutate(undefined, {
+      onSuccess: () => setIsPaused(false),
+      onError: (error: Error) => console.error('Failed to resume:', error)
+    });
+  };
+
+  const handleStop = () => {
+    stop.mutate(undefined, {
+      onSuccess: (result: { file_path: string; folder_path: string; duration_sec: number }) => {
+        setRecordedFilePath(result.file_path);
+        setRecordedFolderPath(result.folder_path);
+        setRecordingDuration(result.duration_sec);
+
+        setStep('review');
+        setIsPaused(false);
+      },
+      onError: (error: Error) => console.error('Failed to stop recording:', error)
+    });
   };
 
   const handleSave = async () => {
     // Add to ledger
     if (recordedFilePath) {
-      try {
-        await invoke('add_recording_command', { filePath: recordedFilePath });
-      } catch (e) {
-        console.error("Failed to add to ledger:", e);
-      }
+      addToLedger.mutate({ filePath: recordedFilePath, durationSec: recordingDuration }, {
+        onError: (e: Error) => console.error("Failed to add to ledger:", e)
+      });
     }
 
-    // Open folder (optional, maybe user doesn't want this every time now that we have a browser? 
-    // But user didn't say to remove it. "When an audio record is 'saved' (user presses save), you will create an entry")
-    // I'll keep the folder opening for now as it's useful feedback.
+    // Open folder
     if (recordedFolderPath) {
-      invoke('plugin:opener|open_path', { path: recordedFolderPath }).catch(e => {
+      invoke('plugin:opener|open_path', { path: recordedFolderPath }).catch((e: unknown) => {
         console.error("Failed to open path:", e);
       });
     }
 
-    // Reset state handled by ReviewScreen exit or we can force it here?
-    // ReviewScreen calls onExit after animation.
+    // Reset state handled by ReviewScreen exit
   };
 
   const handleDiscard = async () => {
     if (recordedFilePath) {
-      try {
-        await invoke('delete_recording_command', { path: recordedFilePath });
-      } catch (e) {
-        console.error("Failed to delete recording:", e);
-        throw e;
-      }
+      await deleteRecording.mutateAsync(recordedFilePath);
     }
   };
 
-  const handleReviewExit = () => {
+  const handleReviewExit = async () => {
     resetState();
     // setHomeView('recordings'); // No longer switching view
-    handleOpenRecordings();
+    await handleOpenRecordings();
   };
 
   const handleOpenRecordings = async () => {
@@ -173,14 +136,13 @@ function App() {
     setStep('home');
     setSelectedPid(null);
     setFilename('');
-    setMicDevice(null);
     setRecordedFilePath('');
     setRecordedFolderPath('');
     setIsPaused(false);
   };
 
   return (
-    <div className="h-screen w-screen bg-neutral-700/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
+    <div className="h-screen w-screen bg-stone-700/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
       <TitleBar variant="home" />
 
       <div className="flex-1 flex flex-col px-5 pb-3 pt-0.5 overflow-hidden">
@@ -229,38 +191,44 @@ function App() {
           </>
         )}
 
-        {step === 'setup' && (
-          <SetupScreen
-            onStart={handleStartRecording}
-            onBack={() => setStep('home')}
-            includeNone={selectedPid !== -1}
-          />
-        )}
+        <Suspense fallback={
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="animate-spin text-white/20" size={32} />
+          </div>
+        }>
+          {step === 'setup' && (
+            <SetupScreen
+              onStart={handleStartRecording}
+              onBack={() => setStep('home')}
+              includeNone={selectedPid !== -1}
+            />
+          )}
 
-        {step === 'recording' && (
-          <RecordingScreen
-            isPaused={isPaused}
-            onPause={handlePause}
-            onResume={handleResume}
-            onStop={handleStop}
-          />
-        )}
+          {step === 'recording' && (
+            <RecordingScreen
+              isPaused={isPaused}
+              onPause={handlePause}
+              onResume={handleResume}
+              onStop={handleStop}
+            />
+          )}
 
-        {step === 'review' && (
-          <ReviewScreen
-            initialFilename={filename}
-            filePath={recordedFilePath}
-            onSave={handleSave}
-            onDiscard={handleDiscard}
-            onExit={handleReviewExit}
-          />
-        )}
+          {step === 'review' && (
+            <ReviewScreen
+              initialFilename={filename}
+              filePath={recordedFilePath}
+              onSave={handleSave}
+              onDiscard={handleDiscard}
+              onExit={handleReviewExit}
+            />
+          )}
 
-        {step === 'settings' && (
-          <SettingsScreen
-            onBack={() => setStep('home')}
-          />
-        )}
+          {step === 'settings' && (
+            <SettingsScreen
+              onBack={() => setStep('home')}
+            />
+          )}
+        </Suspense>
       </div>
 
       <div className="absolute bottom-3 right-3 pointer-events-none">

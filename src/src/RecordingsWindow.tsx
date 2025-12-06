@@ -1,4 +1,4 @@
-import { RecordingList } from './components/RecordingList';
+import { RecordingList } from './features/library/RecordingList';
 import { TitleBar } from './components/TitleBar';
 import { ConnectivityIndicator } from './components/ConnectivityIndicator';
 import { getCurrentWindow } from '@tauri-apps/api/window';

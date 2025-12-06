@@ -1,6 +1,5 @@
-pub mod discovery;
-pub mod recorder;
-mod mixer;
+pub mod error;
+pub mod services;
 
 use tokio::sync::Mutex;
 use std::sync::Arc;
@@ -10,7 +9,11 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager, AppHandle,
 };
-use recorder::AudioRecorder;
+use crate::services::storage::{StorageService, Settings, LedgerEntry};
+use crate::services::audio::AudioRecorder;
+use crate::services::discovery::RunnableApp;
+use crate::error::AppError;
+use validator::Validate;
 
 struct AppState {
     recorder: Arc<Mutex<AudioRecorder>>,
@@ -20,30 +23,30 @@ struct AppState {
     current_recording_path: Mutex<Option<PathBuf>>,
 }
 
-use discovery::RunnableApp;
+
 
 #[tauri::command]
-async fn get_apps() -> Result<Vec<RunnableApp>, String> {
-    discovery::get_running_meeting_apps().await.map_err(|e| e.to_string())
+async fn get_apps() -> Result<Vec<RunnableApp>, AppError> {
+    crate::services::discovery::get_running_meeting_apps().await.map_err(Into::into)
 }
 
 #[tauri::command]
-async fn start_recording_command(pid: i32, filename: Option<String>, mic_device: Option<String>, app_handle: AppHandle) -> Result<(), String> {
+async fn start_recording_command(pid: i32, filename: Option<String>, mic_device: Option<String>, app_handle: AppHandle) -> Result<(), AppError> {
     toggle_recording(&app_handle, pid, filename, mic_device).await;
     Ok(())
 }
 
 #[tauri::command]
-async fn delete_recording_command(path: String) -> Result<(), String> {
+async fn delete_recording_command(path: String) -> Result<(), AppError> {
     let path_buf = PathBuf::from(path);
     if path_buf.exists() {
-        std::fs::remove_file(path_buf).map_err(|e| e.to_string())?;
+        std::fs::remove_file(path_buf)?;
     }
     Ok(())
 }
 
 #[tauri::command]
-async fn pause_recording_command(app_handle: AppHandle) -> Result<(), String> {
+async fn pause_recording_command(app_handle: AppHandle) -> Result<(), AppError> {
     let state = app_handle.state::<AppState>();
     let recorder = state.recorder.lock().await;
     recorder.pause_recording();
@@ -51,7 +54,7 @@ async fn pause_recording_command(app_handle: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn resume_recording_command(app_handle: AppHandle) -> Result<(), String> {
+async fn resume_recording_command(app_handle: AppHandle) -> Result<(), AppError> {
     let state = app_handle.state::<AppState>();
     let recorder = state.recorder.lock().await;
     recorder.resume_recording();
@@ -59,25 +62,26 @@ async fn resume_recording_command(app_handle: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn get_microphones_command() -> Result<Vec<(String, String)>, String> {
+async fn get_microphones_command() -> Result<Vec<(String, String)>, AppError> {
     Ok(AudioRecorder::get_microphones())
 }
 
 #[tauri::command]
-async fn switch_microphone_command(device_name: String, app_handle: AppHandle) -> Result<(), String> {
+async fn switch_microphone_command(device_name: String, app_handle: AppHandle) -> Result<(), AppError> {
     let state = app_handle.state::<AppState>();
     let mut recorder = state.recorder.lock().await;
-    recorder.switch_microphone(device_name)
+    recorder.switch_microphone(device_name).map_err(Into::into)
 }
 
 #[derive(serde::Serialize)]
 struct RecordingResult {
     file_path: String,
     folder_path: String,
+    duration_sec: f64,
 }
 
 #[tauri::command]
-async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult, String> {
+async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult, AppError> {
     let state = app_handle.state::<AppState>();
     let mut is_recording = state.is_recording.lock().await;
     let mut recorder = state.recorder.lock().await;
@@ -85,13 +89,12 @@ async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult
     println!("Stop command received. Is recording: {}", *is_recording);
     
     if *is_recording {
-        if let Err(e) = recorder.stop_recording() {
-            eprintln!("Error stopping recording: {}", e);
-            return Err(e.to_string());
-        }
+        // Stop returns Result<f64, String>
+        let duration = recorder.stop_recording().map_err(|e| AppError::Unexpected(e))?;
+        
         *is_recording = false;
         *state.recording_app_pid.lock().await = None;
-        println!("Recording stopped successfully");
+        println!("Recording stopped successfully. Duration: {:.2}s", duration);
         
         let folder = state.output_folder.lock().await.clone();
         let folder_str = folder.to_string_lossy().to_string();
@@ -102,80 +105,16 @@ async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult
         return Ok(RecordingResult {
             file_path: file_str,
             folder_path: folder_str,
+            duration_sec: duration,
         });
     }
-    Err("Not recording".to_string())
+    Err(AppError::Logic("Not recording".to_string()))
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-struct Settings {
-    scriberr_url: String,
-    api_key: String,
-    output_path: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-struct LedgerEntry {
-    local_id: String,
-    remote_id: Option<String>,
-    file_path: String,
-    upload_status: String, // "incomplete", "uploaded", "failed"
-    created_at: String,
-    retry_count: u32,
-}
-
-fn get_ledger_path() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".config").join("scriberr-companion").join("ledger.json")
-}
-
-fn get_ledger_tmp_path() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".config").join("scriberr-companion").join("ledger.json.tmp")
-}
-
-fn load_ledger() -> Vec<LedgerEntry> {
-    let path = get_ledger_path();
-    let tmp_path = get_ledger_tmp_path();
-
-    // Recovery: If tmp exists, it means previous write failed or crashed. 
-    // Assume tmp is the intended new state.
-    if tmp_path.exists() {
-        let _ = std::fs::rename(&tmp_path, &path);
-    }
-
-    if !path.exists() {
-        return Vec::new();
-    }
-
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return Vec::new(),
-    };
-
-    serde_json::from_str(&content).unwrap_or_default()
-}
-
-fn save_ledger(entries: &Vec<LedgerEntry>) -> Result<(), String> {
-    let path = get_ledger_path();
-    let tmp_path = get_ledger_tmp_path();
-
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-
-    let json = serde_json::to_string_pretty(entries).map_err(|e| e.to_string())?;
-    
-    // Atomic write: Write to tmp, then rename
-    std::fs::write(&tmp_path, json).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp_path, &path).map_err(|e| e.to_string())?;
-    
-    Ok(())
-}
-
+// Storage logic moved to services/storage.rs
 #[tauri::command]
-async fn add_recording_command(file_path: String, app_handle: AppHandle) -> Result<LedgerEntry, String> {
-    let mut entries = load_ledger();
+async fn add_recording_command(file_path: String, duration_sec: f64, app_handle: AppHandle) -> Result<LedgerEntry, AppError> {
+    let mut entries = StorageService::load_ledger()?;
     
     let entry = LedgerEntry {
         local_id: uuid::Uuid::new_v4().to_string(),
@@ -184,14 +123,13 @@ async fn add_recording_command(file_path: String, app_handle: AppHandle) -> Resu
         upload_status: "incomplete".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
         retry_count: 0,
+        duration_sec,
     };
     
-    // Prepend to list (newest first)
     entries.insert(0, entry.clone());
     
-    save_ledger(&entries)?;
+    StorageService::save_ledger(&entries)?;
 
-    // Emit event
     use tauri::Emitter;
     let _ = app_handle.emit("recording-added", &entry);
 
@@ -199,31 +137,30 @@ async fn add_recording_command(file_path: String, app_handle: AppHandle) -> Resu
 }
 
 #[tauri::command]
-async fn get_recordings_command() -> Result<Vec<LedgerEntry>, String> {
-    Ok(load_ledger())
+async fn get_recordings_command() -> Result<Vec<LedgerEntry>, AppError> {
+    Ok(StorageService::load_ledger()?)
 }
 
 #[tauri::command]
-async fn delete_recording_entry_command(local_id: String) -> Result<(), String> {
-    let mut entries = load_ledger();
+async fn delete_recording_entry_command(local_id: String) -> Result<(), AppError> {
+    let mut entries = StorageService::load_ledger()?;
     
     if let Some(index) = entries.iter().position(|e| e.local_id == local_id) {
         let entry = &entries[index];
-        // Try to delete file
         let path = PathBuf::from(&entry.file_path);
         if path.exists() {
             let _ = std::fs::remove_file(path);
         }
         
         entries.remove(index);
-        save_ledger(&entries)?;
+        StorageService::save_ledger(&entries)?;
     }
     
     Ok(())
 }
 
 #[tauri::command]
-async fn check_connection_command(url: String, api_key: String) -> Result<bool, String> {
+async fn check_connection_command(url: String, api_key: String) -> Result<bool, AppError> {
     let client = reqwest::Client::new();
     let base_url = url.trim_end_matches('/');
     let endpoint = format!("{}/api/v1/transcription/models", base_url);
@@ -231,24 +168,15 @@ async fn check_connection_command(url: String, api_key: String) -> Result<bool, 
     let resp = client.get(&endpoint)
         .header("X-API-Key", &api_key)
         .send()
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
         
     Ok(resp.status().is_success())
 }
 
-fn get_settings_path() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".config").join("scriberr-companion").join("settings.json")
-}
-
 #[tauri::command]
-async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Result<(), String> {
-    let path = get_settings_path();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    
+async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Result<(), AppError> {
+    settings.validate().map_err(|e| AppError::Validation(e.to_string()))?;
+
     // Load old settings to check for path change
     let old_settings = load_settings_command(app_handle.clone()).await.unwrap_or(Settings {
         scriberr_url: "".to_string(),
@@ -256,16 +184,17 @@ async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Res
         output_path: "".to_string(),
     });
 
+    let default_dir = app_handle.path().document_dir().unwrap_or(PathBuf::from("/"));
+    let default_path = default_dir.join("ScriberrRecordings").to_string_lossy().to_string();
+
     let old_path_str = if old_settings.output_path.is_empty() {
-        let documents_dir = app_handle.path().document_dir().unwrap_or(PathBuf::from("/"));
-        documents_dir.join("ScriberrRecordings").to_string_lossy().to_string()
+        default_path.clone()
     } else {
         old_settings.output_path.clone()
     };
 
     let new_path_str = if settings.output_path.is_empty() {
-        let documents_dir = app_handle.path().document_dir().unwrap_or(PathBuf::from("/"));
-        documents_dir.join("ScriberrRecordings").to_string_lossy().to_string()
+        default_path
     } else {
         settings.output_path.clone()
     };
@@ -275,32 +204,24 @@ async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Res
         let new_path = PathBuf::from(&new_path_str);
 
         if old_path.exists() {
-            // Create new directory if it doesn't exist
             if !new_path.exists() {
-                std::fs::create_dir_all(&new_path).map_err(|e| e.to_string())?;
+                std::fs::create_dir_all(&new_path)?;
             }
 
-            // Move files
-            // We iterate over entries in old_path and move them to new_path
-            let entries = std::fs::read_dir(&old_path).map_err(|e| e.to_string())?;
+            let entries = std::fs::read_dir(&old_path)?;
             for entry in entries {
-                let entry = entry.map_err(|e| e.to_string())?;
+                let entry = entry?;
                 let path = entry.path();
                 if path.is_file() {
-                    let file_name = path.file_name().ok_or("Invalid filename")?;
+                    let file_name = path.file_name().ok_or(AppError::Unexpected("Invalid filename".into()))?;
                     let new_file_path = new_path.join(file_name);
-                    std::fs::rename(&path, &new_file_path).map_err(|e| e.to_string())?;
+                    std::fs::rename(&path, &new_file_path)?;
                 }
             }
-            // Optionally remove old directory if empty? User didn't specify, but good practice.
-            // let _ = std::fs::remove_dir(&old_path);
         }
 
-        // Update Ledger
-        let mut ledger_entries = load_ledger();
+        let mut ledger_entries = StorageService::load_ledger()?;
         for entry in &mut ledger_entries {
-            // Check if entry.file_path starts with old_path
-            // We need to be careful with path separators and exact matching
             let entry_path = PathBuf::from(&entry.file_path);
             if entry_path.starts_with(&old_path) {
                 if let Ok(stripped) = entry_path.strip_prefix(&old_path) {
@@ -309,57 +230,38 @@ async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Res
                 }
             }
         }
-        save_ledger(&ledger_entries)?;
+        StorageService::save_ledger(&ledger_entries)?;
 
-        // Update AppState
         let state = app_handle.state::<AppState>();
         *state.output_folder.lock().await = new_path;
     }
     
-    let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())?;
+    StorageService::save_settings(&settings)?;
     Ok(())
 }
 
 #[tauri::command]
-async fn load_settings_command(app_handle: AppHandle) -> Result<Settings, String> {
-    let path = get_settings_path();
+async fn load_settings_command(app_handle: AppHandle) -> Result<Settings, AppError> {
     let default_path = app_handle.path().document_dir().unwrap_or(PathBuf::from("/")).join("ScriberrRecordings").to_string_lossy().to_string();
-
-    if !path.exists() {
-        return Ok(Settings {
-            scriberr_url: "".to_string(),
-            api_key: "".to_string(),
-            output_path: default_path,
-        });
-    }
-    
-    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let mut settings: Settings = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    
-    if settings.output_path.is_empty() {
-        settings.output_path = default_path;
-    }
-
-    Ok(settings)
+    Ok(StorageService::load_settings(Some(default_path))?)
 }
 
 #[tauri::command]
-async fn upload_recording_command(local_id: String, app_handle: AppHandle) -> Result<LedgerEntry, String> {
-    let mut entries = load_ledger();
+async fn upload_recording_command(local_id: String, app_handle: AppHandle) -> Result<LedgerEntry, AppError> {
+    let mut entries = StorageService::load_ledger()?;
     let settings = load_settings_command(app_handle).await?;
     
     if settings.scriberr_url.is_empty() || settings.api_key.is_empty() {
-        return Err("Settings not configured".to_string());
+        return Err(AppError::Validation("Settings not configured".to_string()));
     }
 
-    let index = entries.iter().position(|e| e.local_id == local_id).ok_or("Recording not found")?;
+    let index = entries.iter().position(|e| e.local_id == local_id).ok_or(AppError::NotFound("Recording not found".to_string()))?;
     let mut entry = entries[index].clone();
     
     // Check file existence
     let file_path = PathBuf::from(&entry.file_path);
     if !file_path.exists() {
-        return Err("File not found".to_string());
+        return Err(AppError::NotFound("File not found".to_string()));
     }
 
     // Prepare upload
@@ -369,7 +271,7 @@ async fn upload_recording_command(local_id: String, app_handle: AppHandle) -> Re
 
     // Create multipart form
     // Read file manually to avoid async/sync confusion with Form::file
-    let file_bytes = tokio::fs::read(&entry.file_path).await.map_err(|e| format!("Failed to read file: {}", e))?;
+    let file_bytes = tokio::fs::read(&entry.file_path).await?;
     let filename = PathBuf::from(&entry.file_path)
         .file_name()
         .and_then(|n| n.to_str())
@@ -386,41 +288,33 @@ async fn upload_recording_command(local_id: String, app_handle: AppHandle) -> Re
         .header("X-API-Key", &settings.api_key)
         .multipart(form)
         .send()
-        .await;
+        .await?;
 
-    match response {
-        Ok(resp) => {
-            if resp.status().is_success() {
-                // Parse response to get remote ID
-                let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-                if let Some(id) = body.get("id").and_then(|v| v.as_str()) {
-                    entry.remote_id = Some(id.to_string());
-                }
-                entry.upload_status = "uploaded".to_string();
-            } else {
-                entry.upload_status = "failed".to_string();
-                entry.retry_count += 1;
-            }
-        },
-        Err(_) => {
-            entry.upload_status = "failed".to_string();
-            entry.retry_count += 1;
+    if response.status().is_success() {
+        // Parse response to get remote ID
+        let body: serde_json::Value = response.json().await?;
+        if let Some(id) = body.get("id").and_then(|v| v.as_str()) {
+            entry.remote_id = Some(id.to_string());
         }
+        entry.upload_status = "uploaded".to_string();
+    } else {
+        entry.upload_status = "failed".to_string();
+        entry.retry_count += 1;
     }
 
     // Update ledger
     entries[index] = entry.clone();
-    save_ledger(&entries)?;
+    StorageService::save_ledger(&entries)?;
 
     if entry.upload_status == "failed" {
-        return Err("Upload failed".to_string());
+        return Err(AppError::Network("Upload failed".to_string()));
     }
 
     Ok(entry)
 }
 
 #[tauri::command]
-async fn check_file_exists_command(filename: String, app_handle: AppHandle) -> Result<bool, String> {
+async fn check_file_exists_command(filename: String, app_handle: AppHandle) -> Result<bool, AppError> {
     let state = app_handle.state::<AppState>();
     let folder = state.output_folder.lock().await.clone();
     // Check both with and without extension to be safe, or just normalize as we do in start
@@ -457,28 +351,17 @@ pub fn run() {
             upload_recording_command,
             check_file_exists_command
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            // builder.mount_events(app); // removed specta mount
+
+
             let documents_dir = app.path().document_dir().unwrap_or(PathBuf::from("/"));
             let default_output = documents_dir.join("ScriberrRecordings");
             
             // Try to load settings to get configured output path
-            let settings_path = get_settings_path();
-            let output_folder = if settings_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(&settings_path) {
-                    if let Ok(settings) = serde_json::from_str::<Settings>(&content) {
-                        if !settings.output_path.is_empty() {
-                            PathBuf::from(settings.output_path)
-                        } else {
-                            default_output
-                        }
-                    } else {
-                        default_output
-                    }
-                } else {
-                    default_output
-                }
-            } else {
-                default_output
+            let output_folder = match StorageService::load_settings(None) {
+                Ok(settings) if !settings.output_path.is_empty() => PathBuf::from(settings.output_path),
+                _ => default_output.clone(),
             };
 
             if !output_folder.exists() {

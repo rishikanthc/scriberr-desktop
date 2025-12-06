@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { MicSelector } from './MicSelector';
-import logo from '../assets/logo.svg';
+import logo from '../../assets/logo.svg';
+import { useDebounce } from '../../hooks/useDebounce';
+import { useFileExistence } from './api/useFileExistence';
 
 interface SetupScreenProps {
     onStart: (filename: string, micDevice: string | null) => void;
@@ -13,7 +14,6 @@ export function SetupScreen({ onStart, onBack, includeNone = true }: SetupScreen
     const [filename, setFilename] = useState('');
     const [micDevice, setMicDevice] = useState<string | null>('Default');
     const [error, setError] = useState<string | null>(null);
-    const [isChecking, setIsChecking] = useState(false);
 
     useEffect(() => {
         const now = new Date();
@@ -21,31 +21,16 @@ export function SetupScreen({ onStart, onBack, includeNone = true }: SetupScreen
         setFilename(`recording_${timestamp}`);
     }, []);
 
+    const debouncedFilename = useDebounce(filename, 300);
+    const { data: exists } = useFileExistence(debouncedFilename);
+
     useEffect(() => {
-        if (!filename.trim()) {
+        if (exists) {
+            setError('A file with this name already exists.');
+        } else {
             setError(null);
-            return;
         }
-
-        const checkExistence = async () => {
-            setIsChecking(true);
-            try {
-                const exists = await invoke<boolean>('check_file_exists_command', { filename });
-                if (exists) {
-                    setError('A file with this name already exists.');
-                } else {
-                    setError(null);
-                }
-            } catch (err) {
-                console.error("Failed to check file existence", err);
-            } finally {
-                setIsChecking(false);
-            }
-        };
-
-        const timeoutId = setTimeout(checkExistence, 300);
-        return () => clearTimeout(timeoutId);
-    }, [filename]);
+    }, [exists]);
 
     return (
         <div className="flex flex-col h-full">
@@ -87,10 +72,10 @@ export function SetupScreen({ onStart, onBack, includeNone = true }: SetupScreen
                 <div className="mt-auto">
                     <button
                         onClick={() => onStart(filename, micDevice)}
-                        disabled={!!error || isChecking || !filename.trim()}
-                        className={`w-full font-medium rounded-xl py-4 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md ${!!error || isChecking || !filename.trim()
-                                ? 'bg-white/5 text-white/40 cursor-not-allowed border border-white/5'
-                                : 'bg-white/10 hover:bg-white/20 border border-white/10 text-white'
+                        disabled={!!error || !filename.trim()}
+                        className={`w-full font-medium rounded-xl py-4 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md ${!!error || !filename.trim()
+                            ? 'bg-white/5 text-white/40 cursor-not-allowed border border-white/5'
+                            : 'bg-white/10 hover:bg-white/20 border border-white/10 text-white'
                             }`}
                     >
                         Start Recording

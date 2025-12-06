@@ -1,15 +1,10 @@
-import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+
+
 import { motion } from 'framer-motion';
 import { Monitor, RefreshCw, Mic } from 'lucide-react';
 import clsx from 'clsx';
 
-interface RunnableApp {
-    id: string;
-    pid: number;
-    name: string;
-    icon: number[];
-}
+
 
 interface AppSelectorProps {
     onSelect: (pid: number) => void;
@@ -17,36 +12,21 @@ interface AppSelectorProps {
     disabled: boolean;
 }
 
+import { useApps } from './api/useApps';
+
 export function AppSelector({ onSelect, selectedPid, disabled }: AppSelectorProps) {
-    const [apps, setApps] = useState<RunnableApp[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    const fetchApps = async () => {
-        setLoading(true);
-        try {
-            const result = await invoke<RunnableApp[]>('get_apps');
-            setApps(result);
-        } catch (error) {
-            console.error('Failed to fetch apps:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchApps();
-    }, []);
+    const { data: apps = [], isLoading, refetch } = useApps();
 
     return (
         <div className="flex flex-col gap-2 w-full">
             <div className="flex items-center justify-between px-2">
                 <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Select Source</span>
                 <button
-                    onClick={fetchApps}
-                    disabled={loading || disabled}
+                    onClick={() => refetch()}
+                    disabled={isLoading || disabled}
                     className="text-white/40 hover:text-white transition-colors disabled:opacity-50"
                 >
-                    <RefreshCw size={14} className={clsx(loading && "animate-spin")} />
+                    <RefreshCw size={14} className={clsx(isLoading && "animate-spin")} />
                 </button>
             </div>
 
@@ -73,7 +53,7 @@ export function AppSelector({ onSelect, selectedPid, disabled }: AppSelectorProp
                     </div>
                 </motion.button>
 
-                {apps.length === 0 && !loading && (
+                {apps.length === 0 && !isLoading && (
                     <div className="text-center py-4 text-white/30 text-sm">No meeting apps found</div>
                 )}
 

@@ -21,8 +21,13 @@ function Main() {
   return <App />;
 }
 
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './lib/queryClient'
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Main />
+    <QueryClientProvider client={queryClient}>
+      <Main />
+    </QueryClientProvider>
   </StrictMode>,
 )

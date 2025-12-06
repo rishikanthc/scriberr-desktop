@@ -1,44 +1,37 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+
 import { open } from '@tauri-apps/plugin-dialog';
-import { ArrowLeft, Save, Wifi, WifiOff, Loader2, CheckCircle, AlertCircle, Folder } from 'lucide-react';
+import { ArrowLeft, Save, Wifi, Loader2, CheckCircle, AlertCircle, Folder } from 'lucide-react';
 import clsx from 'clsx';
-import logo from '../assets/logo.svg';
+import logo from '../../assets/logo.svg';
 
 interface SettingsScreenProps {
     onBack: () => void;
 }
 
-interface Settings {
-    scriberr_url: string;
-    api_key: string;
-    output_path: string;
-}
+import { useSettings, useSaveSettings, useTestConnection } from './api/useSettings';
 
 export function SettingsScreen({ onBack }: SettingsScreenProps) {
+    const { data: settings, isLoading } = useSettings();
+    const saveMutation = useSaveSettings();
+    const testConnectionMutation = useTestConnection();
+
+    // Local state for form editing (initialized from settings when available)
     const [url, setUrl] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [outputPath, setOutputPath] = useState('');
+
+    // Status state
     const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error' | 'saving'>('idle');
     const [message, setMessage] = useState('');
-    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadSettings();
-    }, []);
-
-    const loadSettings = async () => {
-        try {
-            const settings = await invoke<Settings>('load_settings_command');
+        if (settings) {
             setUrl(settings.scriberr_url);
             setApiKey(settings.api_key);
             setOutputPath(settings.output_path);
-        } catch (e) {
-            console.error('Failed to load settings:', e);
-        } finally {
-            setLoading(false);
         }
-    };
+    }, [settings]);
 
     const validateUrl = (value: string) => {
         try {
@@ -83,19 +76,21 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
         setStatus('testing');
         setMessage('Testing connection...');
 
-        try {
-            const success = await invoke<boolean>('check_connection_command', { url, apiKey });
-            if (success) {
-                setStatus('success');
-                setMessage('Connected successfully!');
-            } else {
+        testConnectionMutation.mutate({ url, apiKey }, {
+            onSuccess: (success) => {
+                if (success) {
+                    setStatus('success');
+                    setMessage('Connected successfully!');
+                } else {
+                    setStatus('error');
+                    setMessage('Connection failed. Check URL and API Key.');
+                }
+            },
+            onError: (error) => {
                 setStatus('error');
-                setMessage('Connection failed. Check URL and API Key.');
+                setMessage(`Connection error: ${error}`);
             }
-        } catch (e) {
-            setStatus('error');
-            setMessage(`Connection error: ${e}`);
-        }
+        });
     };
 
     const handleSave = async () => {
@@ -114,23 +109,22 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
         setStatus('saving');
         setMessage('Saving settings (moving files if needed)...');
 
-        try {
-            await invoke('save_settings_command', {
-                settings: { scriberr_url: url, api_key: apiKey, output_path: outputPath }
-            });
-
-            setStatus('success');
-            setMessage('Settings saved!');
-            setTimeout(() => {
-                onBack();
-            }, 1000);
-        } catch (e) {
-            setStatus('error');
-            setMessage(`Failed to save: ${e}`);
-        }
+        saveMutation.mutate({ scriberr_url: url, api_key: apiKey, output_path: outputPath }, {
+            onSuccess: () => {
+                setStatus('success');
+                setMessage('Settings saved!');
+                setTimeout(() => {
+                    onBack();
+                }, 1000);
+            },
+            onError: (error) => {
+                setStatus('error');
+                setMessage(`Failed to save: ${error}`);
+            }
+        });
     };
 
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="flex items-center justify-center h-full text-white/50">
                 <Loader2 className="animate-spin" />

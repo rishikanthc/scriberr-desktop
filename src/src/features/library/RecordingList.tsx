@@ -18,11 +18,8 @@ const getFilename = (path: string) => {
     return path.split(/[/\\]/).pop() || 'Unknown Recording';
 };
 
-interface RecordingListProps {
-    onSelect?: (entry: LedgerEntry) => void;
-}
 
-export function RecordingList({ onSelect }: RecordingListProps) {
+export function RecordingList() {
     const { data: recordings = [], isLoading, refetch } = useRecordings();
     const deleteMutation = useDeleteRecording();
     const uploadMutation = useUploadRecording();

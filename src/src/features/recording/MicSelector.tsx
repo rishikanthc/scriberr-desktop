@@ -1,56 +1,26 @@
-import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MicSelectorProps {
-    onSelect: (deviceName: string | null) => void;
-    disabled: boolean;
-    includeNone?: boolean;
+    devices: { deviceId: string; label: string }[];
+    selectedDevice: string;
+    onSelect: (deviceId: string) => void;
+    disabled?: boolean;
+    isLoading?: boolean;
 }
 
-export function MicSelector({ onSelect, disabled, includeNone = false }: MicSelectorProps) {
-    const [mics, setMics] = useState<{ id: string; name: string }[]>([]);
-    const [selectedMic, setSelectedMic] = useState<string>('Default');
+export function MicSelector({ devices, selectedDevice, onSelect, disabled = false, isLoading = false }: MicSelectorProps) {
     const [isOpen, setIsOpen] = useState(false);
 
-    useEffect(() => {
-        async function loadMics() {
-            try {
-                const list = await invoke<[string, string][]>('get_microphones_command');
-                const formatted = list.map(([id, name]) => ({ id, name }));
-                if (includeNone) {
-                    formatted.unshift({ id: 'None', name: 'None (System Audio Only)' });
-                }
-                setMics(formatted);
-
-                // Set initial selected mic
-                if (formatted.length > 0) {
-                    // If we have a stored selection that is valid, keep it.
-                    // Otherwise default to first.
-                    // For now, just default to first if 'Default' or invalid.
-                    if (selectedMic === 'Default' || !formatted.some(m => m.id === selectedMic)) {
-                        const defaultMic = formatted[0];
-                        setSelectedMic(defaultMic.id);
-                        onSelect(defaultMic.id === 'None' ? null : defaultMic.id);
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to load mics', e);
-            }
-        }
-        loadMics();
-    }, [includeNone]); // Reload if includeNone changes
-
     const handleSelect = (id: string) => {
-        setSelectedMic(id);
-        onSelect(id === 'None' ? null : id);
+        onSelect(id);
         setIsOpen(false);
     };
 
-    const selectedName = mics.find(m => m.id === selectedMic)?.name || 'Select Microphone';
+    const selectedLabel = devices.find(d => d.deviceId === selectedDevice)?.label || 'Select Microphone';
 
     return (
-        <div className="relative">
+        <div className="relative w-full">
             <button
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
@@ -63,7 +33,7 @@ export function MicSelector({ onSelect, disabled, includeNone = false }: MicSele
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                         <line x1="12" x2="12" y1="19" y2="22" />
                     </svg>
-                    <span className="truncate">{selectedName}</span>
+                    <span className="truncate">{isLoading ? 'Loading...' : selectedLabel}</span>
                 </div>
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -89,16 +59,16 @@ export function MicSelector({ onSelect, disabled, includeNone = false }: MicSele
                         exit={{ opacity: 0, y: -10 }}
                         className="absolute z-50 w-full mt-2 bg-neutral-900/90 border border-white/10 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto backdrop-blur-md"
                     >
-                        {mics.map((mic) => (
+                        {devices.map((mic) => (
                             <button
-                                key={mic.id}
-                                onClick={() => handleSelect(mic.id)}
-                                className={`w-full text-left px-4 py-3 text-sm transition-colors ${selectedMic === mic.id
-                                        ? 'bg-white/10 text-white'
-                                        : 'text-white/60 hover:bg-white/5 hover:text-white'
+                                key={mic.deviceId}
+                                onClick={() => handleSelect(mic.deviceId)}
+                                className={`w-full text-left px-4 py-3 text-sm transition-colors ${selectedDevice === mic.deviceId
+                                    ? 'bg-white/10 text-white'
+                                    : 'text-white/60 hover:bg-white/5 hover:text-white'
                                     }`}
                             >
-                                {mic.name}
+                                {mic.label}
                             </button>
                         ))}
                     </motion.div>

@@ -2,8 +2,8 @@ import { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import './index.css'
-import App from './App.tsx'
-import { RecordingsWindow } from './RecordingsWindow.tsx'
+import { DashboardWindow } from './features/dashboard/DashboardWindow';
+import { RecorderWindow } from './features/recorder/RecorderWindow';
 
 function Main() {
   const [label, setLabel] = useState<string | null>(null);
@@ -12,13 +12,14 @@ function Main() {
     setLabel(getCurrentWindow().label);
   }, []);
 
-  if (!label) return null; // Or a loader
+  if (!label) return null;
 
-  if (label === 'recordings') {
-    return <RecordingsWindow />;
+  if (label === 'recorder') {
+    return <RecorderWindow />;
   }
 
-  return <App />;
+  // Default to Dashboard for 'main'
+  return <DashboardWindow />;
 }
 
 import { QueryClientProvider } from '@tanstack/react-query'

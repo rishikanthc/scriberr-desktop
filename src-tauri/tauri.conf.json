@@ -15,17 +15,6 @@
     "windows": [
       {
         "title": "Scriberr Companion",
-        "width": 340,
-        "height": 480,
-        "decorations": false,
-        "transparent": true,
-        "visible": false,
-        "resizable": false,
-        "alwaysOnTop": true,
-        "label": "main"
-      },
-      {
-        "title": "Recordings",
         "width": 900,
         "height": 800,
         "decorations": false,
@@ -33,7 +22,18 @@
         "visible": false,
         "resizable": true,
         "alwaysOnTop": false,
-        "label": "recordings",
+        "label": "main"
+      },
+      {
+        "title": "Recorder",
+        "width": 340,
+        "height": 480,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "label": "recorder",
         "url": "/"
       }
     ],

@@ -1,4 +1,4 @@
-import { Play, Pause, Square } from 'lucide-react';
+import { Play, Pause } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface ControlsProps {

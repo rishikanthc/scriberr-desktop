@@ -7,9 +7,9 @@ import clsx from 'clsx';
 
 
 interface AppSelectorProps {
-    onSelect: (pid: number) => void;
+    onSelect: (app: { pid: number; name: string } | null) => void;
     selectedPid: number | null;
-    disabled: boolean;
+    disabled?: boolean;
 }
 
 import { useApps } from './api/useApps';
@@ -35,7 +35,7 @@ export function AppSelector({ onSelect, selectedPid, disabled }: AppSelectorProp
                 <motion.button
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    onClick={() => onSelect(-1)}
+                    onClick={() => onSelect({ pid: -1, name: "Microphone" })}
                     disabled={disabled}
                     className={clsx(
                         "flex items-center gap-3 p-3 rounded-xl text-left transition-all border mb-2",
@@ -62,7 +62,7 @@ export function AppSelector({ onSelect, selectedPid, disabled }: AppSelectorProp
                         key={app.pid}
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
-                        onClick={() => onSelect(app.pid)}
+                        onClick={() => onSelect(app)}
                         disabled={disabled}
                         className={clsx(
                             "flex items-center gap-3 p-3 rounded-xl text-left transition-all border",

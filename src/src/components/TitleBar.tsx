@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import logoIcon from '../assets/scriberr-icon-cropped.png';
-import logoText from '../assets/scriberr_text_logo.svg';
+import { ScriberrTextLogo } from './ScriberrTextLogo';
 
 interface TitleBarProps {
     onClose?: () => void;
@@ -23,8 +23,8 @@ export function TitleBar({ onClose, variant = 'default' }: TitleBarProps) {
             <div className="flex items-center gap-2 pointer-events-none">
                 <img src={logoIcon} alt="Scriberr" className="h-8 w-8 drop-shadow-lg p-0 m-0" />
                 <div className="flex flex-col justify-center h-full p-0">
-                    <img src={logoText} alt="Scriberr" className="h-4 w-auto mb-0.5" />
-                    <span className="text-[8px] font-bold tracking-[0.3em] text-white/40 font-sans leading-none ml-0.5">
+                    <ScriberrTextLogo color="#ffffff" className="h-4 w-auto mb-0.5" />
+                    <span className="text-[8px] font-bold tracking-[0.3em] text-white/50 font-sans leading-none flex justify-center items-center">
                         COMPANION
                     </span>
                 </div>

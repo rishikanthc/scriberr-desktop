@@ -142,7 +142,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-stone-700/70 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
+    <div className="h-screen w-screen bg-stone-700/85 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
       <TitleBar variant="home" />
 
       <div className="flex-1 flex flex-col px-5 pb-3 pt-0.5 overflow-hidden">

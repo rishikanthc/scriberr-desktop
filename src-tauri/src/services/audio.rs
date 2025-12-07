@@ -12,6 +12,7 @@ use hound::{WavWriter, WavSpec};
 use ringbuf::HeapProducer;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::Sample;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::mixer::AudioMixer;
 
@@ -36,7 +37,9 @@ pub struct AudioRecorder {
     paused: Arc<std::sync::atomic::AtomicBool>,
     mixer_running: Arc<std::sync::atomic::AtomicBool>,
     mic_producer: Arc<Mutex<Option<Arc<Mutex<HeapProducer<f32>>>>>>,
+
     start_time: Arc<Mutex<Option<std::time::Instant>>>,
+    start_timestamp: Arc<Mutex<Option<u64>>>, // For UI Sync (Unix Millis)
 }
 
 impl AudioRecorder {
@@ -49,8 +52,17 @@ impl AudioRecorder {
             paused: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             mixer_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             mic_producer: Arc::new(Mutex::new(None)),
+
             start_time: Arc::new(Mutex::new(None)),
+            start_timestamp: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn get_status(&self) -> (bool, bool, Option<u64>) {
+        let is_running = self.mixer_running.load(std::sync::atomic::Ordering::Relaxed);
+        let is_paused = self.paused.load(std::sync::atomic::Ordering::Relaxed);
+        let timestamp = *self.start_timestamp.lock().unwrap();
+        (is_running, is_paused, timestamp)
     }
 
     // ... (keep pause/resume/get_microphones/switch_microphone as is - I will use MultiReplace for better control)
@@ -142,8 +154,14 @@ impl AudioRecorder {
         let writer_arc = Arc::new(Mutex::new(Some(writer)));
         self.writer = writer_arc.clone();
         
-        // precise time tracking
+        // precise time tracking for file duration
         *self.start_time.lock().unwrap() = Some(std::time::Instant::now());
+        
+        // Wall clock time for UI sync
+        let now = SystemTime::now();
+        let since_the_epoch = now.duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+        *self.start_timestamp.lock().unwrap() = Some(since_the_epoch.as_millis() as u64);
 
         // 2. Setup Mixer
         let sys_enabled = true; // Always capture system audio per requirements
@@ -347,6 +365,9 @@ impl AudioRecorder {
         } else {
             0.0
         };
+
+        // Clear timestamps
+        *self.start_timestamp.lock().unwrap() = None;
 
         Ok(duration)
     }

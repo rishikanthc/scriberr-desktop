@@ -4,14 +4,17 @@ import { Controls } from '../recording/Controls';
 import { Timer } from '../recording/Timer';
 import { useRecordingControls } from '../recording/api/useRecordingControls';
 import { useMicrophones } from '../recording/api/useMicrophones';
+import { useRecordingStatus } from '../recording/api/useRecordingStatus'; // New Hook
 import { AlertCircle, Mic } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Visualizer } from './Visualizer';
 
 export function RecorderScreen() {
+    // 1. Fetch Backend Status (Source of Truth)
+    const { data: status, isLoading: isStatusLoading } = useRecordingStatus();
+
+    // 2. Local controls (Mutations)
     const {
-        isRecording,
-        isPaused,
         startMutation,
         stopMutation,
         pauseMutation,
@@ -35,6 +38,12 @@ export function RecorderScreen() {
         }
     }, [mics, selectedMic]);
 
+    // Derived State
+    const isRecording = status?.is_recording ?? false;
+    const isPaused = status?.is_paused ?? false;
+    const startTime = status?.start_time_ms ?? null;
+    const isVisualizerActive = isRecording && !isPaused;
+
     const handleStart = () => {
         startMutation.mutate({
             micDevice: selectedMic || undefined,
@@ -53,19 +62,21 @@ export function RecorderScreen() {
         });
     };
 
+    if (isStatusLoading) return null; // Or a loader
+
     return (
         <div className="flex flex-col h-full items-center justify-between p-8 relative select-none overflow-hidden">
 
-            {/* Top Section removed as requested */}
+            {/* Top Section */}
             <div className="w-full h-8" />
 
 
-            {/* Middle Section: Timer or Mic Visual */}
-            <div className="flex-1 flex flex-col items-center justify-center z-10 w-full relative">
+            {/* Center Section: Visualizer OR Start Button */}
+            <div className="flex-1 flex items-center justify-center w-full relative">
                 <AnimatePresence mode="wait">
                     {isRecording ? (
                         <motion.div
-                            key="recording-state"
+                            key="recording-hero"
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.9 }}
@@ -73,12 +84,16 @@ export function RecorderScreen() {
                         >
                             {/* Visualizer Background - Absolute */}
                             <div className="absolute inset-0 z-0">
-                                <Visualizer isActive={!isPaused} />
+                                <Visualizer isActive={isVisualizerActive} />
                             </div>
 
                             {/* Timer - Center Overlay */}
                             <div className="z-10">
-                                <Timer isActive={!isPaused} />
+                                <Timer
+                                    startTime={startTime}
+                                    isActive={isVisualizerActive}
+                                    isPaused={isPaused}
+                                />
                             </div>
                         </motion.div>
                     ) : (
@@ -98,7 +113,6 @@ export function RecorderScreen() {
                                 <div className="absolute inset-0 rounded-full border-2 border-rose-500/30 group-hover:border-rose-500/50 transition-colors" />
 
                                 {/* Inner Circle (The Button) */}
-                                {/* Replaced blur div with ring/shadow on this element to avoid square artifacts */}
                                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center transition-all duration-300 shadow-[0_0_20px_rgba(244,63,94,0.3)] group-hover:shadow-[0_0_40px_rgba(244,63,94,0.6)]">
                                     <Mic className="text-white w-8 h-8 opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all" />
                                 </div>
@@ -137,19 +151,22 @@ export function RecorderScreen() {
                     <MicSelector
                         devices={mics.map(m => ({ deviceId: m.name, label: m.name }))}
                         selectedDevice={selectedMic}
-                        onSelect={(device) => {
-                            setSelectedMic(device);
-                            switchMicMutation.mutate(device);
+                        onSelect={(mic) => {
+                            setSelectedMic(mic);
+                            if (isRecording) {
+                                switchMicMutation.mutate(mic);
+                            }
                         }}
                         isLoading={isLoadingMics}
                         disabled={isRecording}
                     />
-                </div>
 
-                {/* System Audio Subtitle */}
-                <div className="flex items-center gap-1.5 text-xs text-stone-500/80 font-medium -mt-6">
-                    {/* <Volume2 size={12} className="opacity-70" /> */}
-                    <span>System audio will also be recorded</span>
+                    {/* System Audio Text Indicator (Replaces Button) */}
+                    <div className="mt-2 text-center">
+                        <span className="text-white/30 text-[10px] uppercase tracking-wider font-medium">
+                            System audio will also be recorded
+                        </span>
+                    </div>
                 </div>
             </div>
 

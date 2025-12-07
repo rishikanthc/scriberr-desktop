@@ -26,6 +26,7 @@ export const useRecordingControls = () => {
             setIsRecording(true);
             setIsPaused(false);
             queryClient.invalidateQueries({ queryKey: ['isRecording'] });
+            queryClient.invalidateQueries({ queryKey: ['recordingStatus'] });
         },
         onError: (error) => {
             console.error("Start recording failed:", error);
@@ -38,6 +39,7 @@ export const useRecordingControls = () => {
         },
         onSuccess: () => {
             setIsPaused(true);
+            queryClient.invalidateQueries({ queryKey: ['recordingStatus'] });
         }
     });
 
@@ -47,6 +49,7 @@ export const useRecordingControls = () => {
         },
         onSuccess: () => {
             setIsPaused(false);
+            queryClient.invalidateQueries({ queryKey: ['recordingStatus'] });
         }
     });
 
@@ -58,6 +61,7 @@ export const useRecordingControls = () => {
             setIsRecording(false);
             setIsPaused(false);
             setRecordingDuration(data.duration_sec);
+            queryClient.invalidateQueries({ queryKey: ['recordingStatus'] });
         }
     });
 

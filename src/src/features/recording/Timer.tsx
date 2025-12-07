@@ -2,28 +2,33 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 interface TimerProps {
-    isActive: boolean;
+    startTime: number | null; // Unix millis
+    isActive: boolean; // isRecording && !isPaused
+    isPaused: boolean;
 }
 
-export function Timer({ isActive }: TimerProps) {
-    const [seconds, setSeconds] = useState(0);
+export function Timer({ startTime, isActive, isPaused }: TimerProps) {
+    const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
-        let interval: ReturnType<typeof setInterval> | null = null;
-
-        if (isActive) {
-            interval = setInterval(() => {
-                setSeconds(s => s + 1);
-            }, 1000);
-        } else if (!isActive && seconds !== 0) {
-            // Paused
-            if (interval) clearInterval(interval);
+        if (!startTime) {
+            setElapsed(0);
+            return;
         }
 
-        return () => {
-            if (interval) clearInterval(interval);
+        // Update immediately
+        const update = () => {
+            const now = Date.now();
+            const diff = Math.max(0, Math.floor((now - startTime) / 1000));
+            setElapsed(diff);
         };
-    }, [isActive, seconds]);
+        update();
+
+        if (!isActive) return;
+
+        const interval = setInterval(update, 1000);
+        return () => clearInterval(interval);
+    }, [startTime, isActive]);
 
     const formatTime = (totalSeconds: number) => {
         const mins = Math.floor(totalSeconds / 60);
@@ -38,7 +43,7 @@ export function Timer({ isActive }: TimerProps) {
                 animate={{ opacity: isActive ? [1, 0.8, 1] : 0.5 }}
                 transition={{ duration: 2, repeat: isActive ? Infinity : 0, ease: "easeInOut" }}
             >
-                {formatTime(seconds)}
+                {formatTime(elapsed)}
             </motion.div>
             {isActive && (
                 <motion.div
@@ -53,7 +58,7 @@ export function Timer({ isActive }: TimerProps) {
                     <span className="text-white/60 text-xs font-medium uppercase tracking-wider">Recording</span>
                 </motion.div>
             )}
-            {!isActive && seconds > 0 && (
+            {isPaused && (
                 <div className="mt-2 text-yellow-500/80 text-xs font-medium uppercase tracking-wider flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-yellow-500" />
                     Paused

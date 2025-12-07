@@ -64,6 +64,25 @@ struct RecordingResult {
     duration_sec: f64,
 }
 
+#[derive(serde::Serialize)]
+struct RecordingStatus {
+    is_recording: bool,
+    is_paused: bool,
+    start_time_ms: Option<u64>,
+}
+
+#[tauri::command]
+async fn get_recording_status_command(app_handle: AppHandle) -> Result<RecordingStatus, AppError> {
+    let state = app_handle.state::<AppState>();
+    let recorder = state.recorder.lock().await;
+    let (is_recording, is_paused, start_time_ms) = recorder.get_status();
+    Ok(RecordingStatus {
+        is_recording,
+        is_paused,
+        start_time_ms,
+    })
+}
+
 #[tauri::command]
 async fn pause_recording_command(app_handle: AppHandle) -> Result<(), AppError> {
     let state = app_handle.state::<AppState>();
@@ -337,7 +356,11 @@ pub fn run() {
             get_recordings_command,
             delete_recording_entry_command,
             upload_recording_command,
-            check_file_exists_command
+            get_recordings_command,
+            delete_recording_entry_command,
+            upload_recording_command,
+            check_file_exists_command,
+            get_recording_status_command
         ])
         .setup(move |app| {
             // builder.mount_events(app); // removed specta mount

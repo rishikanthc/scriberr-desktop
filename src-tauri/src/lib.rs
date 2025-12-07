@@ -11,7 +11,7 @@ use tauri::{
 };
 use crate::services::storage::{StorageService, Settings};
 use crate::services::audio::AudioRecorder;
-use crate::services::db::{DatabaseService, CachedRecording, SyncStatus};
+use crate::services::db::{DatabaseService, CachedRecording};
 use crate::services::sync::SyncService;
 use crate::error::AppError;
 use validator::Validate;
@@ -22,6 +22,7 @@ struct AppState {
     output_folder: Mutex<PathBuf>,
     current_recording_path: Mutex<Option<PathBuf>>,
     db: Arc<DatabaseService>,
+    sync: Arc<SyncService>,
 }
 
 #[tauri::command]
@@ -201,40 +202,15 @@ async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Res
     };
 
     if old_path_str != new_path_str {
-        let old_path = PathBuf::from(&old_path_str);
-        let new_path = PathBuf::from(&new_path_str);
-
-        if old_path.exists() {
-            if !new_path.exists() {
-                std::fs::create_dir_all(&new_path)?;
-            }
-
-            let entries = std::fs::read_dir(&old_path)?;
-            for entry in entries {
-                let entry = entry?;
-                let path = entry.path();
-                if path.is_file() {
-                    let file_name = path.file_name().ok_or(AppError::Unexpected("Invalid filename".into()))?;
-                    let new_file_path = new_path.join(file_name);
-                    std::fs::rename(&path, &new_file_path)?;
-                }
-            }
-        }
-
-        let mut ledger_entries = StorageService::load_ledger()?;
-        for entry in &mut ledger_entries {
-            let entry_path = PathBuf::from(&entry.file_path);
-            if entry_path.starts_with(&old_path) {
-                if let Ok(stripped) = entry_path.strip_prefix(&old_path) {
-                    let new_entry_path = new_path.join(stripped);
-                    entry.file_path = new_entry_path.to_string_lossy().to_string();
-                }
-            }
-        }
-        StorageService::save_ledger(&ledger_entries)?;
+        // Delegate migration logic
+        StorageService::migrate_recordings(&old_path_str, &new_path_str)?;
+        
+        // TODO: We should also update the SQLite DB paths if they point to the old folder.
+        // Ideally DB service should listen for this or expose a migrate method.
+        // For now, adhering to the "thin controller" manifesto, we moved the file IO out.
 
         let state = app_handle.state::<AppState>();
-        *state.output_folder.lock().await = new_path;
+        *state.output_folder.lock().await = PathBuf::from(&new_path_str);
     }
     
     StorageService::save_settings(&settings)?;
@@ -250,74 +226,8 @@ async fn load_settings_command(app_handle: AppHandle) -> Result<Settings, AppErr
 #[tauri::command]
 async fn upload_recording_command(local_id: String, app_handle: AppHandle) -> Result<CachedRecording, AppError> {
     let state = app_handle.state::<AppState>();
-    let settings = load_settings_command(app_handle.clone()).await?;
-    
-    if settings.scriberr_url.is_empty() || settings.api_key.is_empty() {
-        return Err(AppError::Validation("Settings not configured".to_string()));
-    }
-
-    let recording = state.db.get_recording(&local_id).await
-        .map_err(|_| AppError::NotFound("Recording not found".to_string()))?;
-
-    // Check file existence
-    let file_path_str = recording.local_file_path.clone().ok_or(AppError::NotFound("File path missing".to_string()))?;
-    let file_path = PathBuf::from(&file_path_str);
-    if !file_path.exists() {
-        return Err(AppError::NotFound("File not found on disk".to_string()));
-    }
-
-    // Update status to uploading
-    state.db.update_sync_status(&local_id, SyncStatus::Uploading).await?;
-
-    // Prepare upload
-    let client = reqwest::Client::new();
-    let base_url = settings.scriberr_url.trim_end_matches('/');
-    let endpoint = format!("{}/api/v1/transcription/upload", base_url);
-
-    // Read file
-    let file_bytes = tokio::fs::read(&file_path).await?;
-    let filename = file_path.file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("recording.wav")
-        .to_string();
-
-    let part = reqwest::multipart::Part::bytes(file_bytes).file_name(filename.clone());
-    let form = reqwest::multipart::Form::new()
-        .part("audio", part)
-        .text("title", recording.title.clone());
-
-    // Send request
-    let response = client.post(&endpoint)
-        .header("X-API-Key", &settings.api_key)
-        .multipart(form)
-        .send()
-        .await;
-
-    match response {
-        Ok(resp) => {
-            if resp.status().is_success() {
-                let body: serde_json::Value = resp.json().await?;
-                let remote_id = body.get("id").and_then(|v| v.as_str())
-                    .ok_or(AppError::Network("Invalid response from server".to_string()))?;
-                
-                state.db.finalize_upload(&local_id, remote_id).await?;
-                
-                // Prune local file if not kept offline
-                if !recording.keep_offline {
-                    let _ = tokio::fs::remove_file(&file_path).await;
-                }
-            } else {
-                state.db.update_sync_status(&local_id, SyncStatus::Failed).await?;
-                return Err(AppError::Network(format!("Upload failed: {}", resp.status())));
-            }
-        },
-        Err(e) => {
-            state.db.update_sync_status(&local_id, SyncStatus::Failed).await?;
-            return Err(AppError::Network(e.to_string()));
-        }
-    }
-
-    Ok(state.db.get_recording(&local_id).await?)
+    let recording = state.sync.upload_recording(&local_id).await?;
+    Ok(recording)
 }
 
 #[tauri::command]
@@ -470,8 +380,10 @@ pub fn run() {
             }).expect("Failed to init database");
             let db = Arc::new(db);
             
+
+
             // Start Sync Service
-            let sync_service = SyncService::new(db.clone(), app_handle);
+            let sync_service = Arc::new(SyncService::new(db.clone(), app_handle));
             sync_service.start();
 
             let state = AppState {
@@ -480,6 +392,7 @@ pub fn run() {
                 output_folder: Mutex::new(output_folder.clone()),
                 current_recording_path: Mutex::new(None),
                 db: db.clone(),
+                sync: sync_service.clone(),
             };
             app.manage(state);
 

@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import logoIcon from '../assets/scriberr-icon-cropped.png';
+import logoIcon from '../../assets/scriberr-icon-cropped.png';
 import { ScriberrTextLogo } from './ScriberrTextLogo';
 
 interface TitleBarProps {

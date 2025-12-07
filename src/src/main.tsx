@@ -7,17 +7,13 @@ import { Toaster } from 'sonner';
 import { useSettings } from './features/settings/api/useSettings';
 import { OnboardingScreen } from './features/onboarding/OnboardingScreen';
 import { Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+
 
 function Main() {
   const { data: settings, isLoading, refetch } = useSettings();
-  const [isOnboarded, setIsOnboarded] = useState(false);
 
-  useEffect(() => {
-    if (settings && settings.scriberr_url && settings.api_key) {
-      setIsOnboarded(true);
-    }
-  }, [settings]);
+  // Derive state directly from data - distinct from "syncing" state
+  const isConfigured = Boolean(settings?.scriberr_url && settings?.api_key);
 
   if (isLoading) {
     return (
@@ -27,14 +23,13 @@ function Main() {
     );
   }
 
-  // If we have settings or have just finished onboarding, show dashboard
-  if (isOnboarded) {
+  // If we have settings, show dashboard
+  if (isConfigured) {
     return <DashboardWindow />;
   }
 
   return <OnboardingScreen onComplete={() => {
     refetch(); // Reload settings to ensure we get the latest
-    setIsOnboarded(true);
   }} />;
 }
 

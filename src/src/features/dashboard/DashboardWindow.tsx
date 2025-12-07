@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { RecordingList } from '../library/RecordingList';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { RecorderScreen } from '../recorder/RecorderScreen';
-import { TitleBar } from '../../components/TitleBar';
+import { TitleBar } from '../shell/TitleBar';
 import clsx from 'clsx';
 
 type View = 'recordings' | 'settings' | 'recorder';

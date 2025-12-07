@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MicSelector } from '../recording/MicSelector';
-import { Controls } from '../recording/Controls';
-import { Timer } from '../recording/Timer';
+import { Controls } from '../recording/components/Controls';
+import { Timer } from '../recording/components/Timer';
 import { useRecordingControls } from '../recording/api/useRecordingControls';
 import { useMicrophones } from '../recording/api/useMicrophones';
 import { useRecordingStatus } from '../recording/api/useRecordingStatus'; // New Hook

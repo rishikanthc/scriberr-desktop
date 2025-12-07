@@ -111,4 +111,45 @@ impl StorageService {
         std::fs::write(path, json)?;
         Ok(())
     }
+    pub fn migrate_recordings(old_path_str: &str, new_path_str: &str) -> Result<(), AppError> {
+        let old_path = PathBuf::from(old_path_str);
+        let new_path = PathBuf::from(new_path_str);
+
+        if old_path.exists() {
+             if !new_path.exists() {
+                std::fs::create_dir_all(&new_path)?;
+            }
+
+            // Move files physically
+            let entries = std::fs::read_dir(&old_path)?;
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_file() {
+                    let file_name = path.file_name().ok_or(AppError::Unexpected("Invalid filename".into()))?;
+                    let new_file_path = new_path.join(file_name);
+                    std::fs::rename(&path, &new_file_path)?;
+                }
+            }
+        }
+
+        if let Ok(mut ledger_entries) = Self::load_ledger() {
+             let mut changed = false;
+             for entry in &mut ledger_entries {
+                let entry_path = PathBuf::from(&entry.file_path);
+                if entry_path.starts_with(&old_path) {
+                    if let Ok(stripped) = entry_path.strip_prefix(&old_path) {
+                        let new_entry_path = new_path.join(stripped);
+                        entry.file_path = new_entry_path.to_string_lossy().to_string();
+                        changed = true;
+                    }
+                }
+            }
+            if changed {
+                 Self::save_ledger(&ledger_entries)?;
+            }
+        }
+
+        Ok(())
+    }
 }

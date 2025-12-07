@@ -2,31 +2,31 @@ import { useState, useEffect } from 'react';
 
 interface TimerProps {
     isActive: boolean;
+    isPaused?: boolean;
+    startTime: number | null;
 }
 
-export function Timer({ isActive }: TimerProps) {
-    const [seconds, setSeconds] = useState(0);
+export function Timer({ isActive, isPaused, startTime }: TimerProps) {
+    const [now, setNow] = useState(Date.now());
 
     useEffect(() => {
         let interval: number | undefined;
 
-        if (isActive) {
+        if (isActive && !isPaused) {
             interval = setInterval(() => {
-                setSeconds(s => s + 1);
+                setNow(Date.now());
             }, 1000);
         }
-        // Don't reset seconds when paused (isActive becomes false), only on unmount or explicit reset if needed.
-        // But here isActive toggles with pause.
-        // We need a way to reset.
-        // Actually, the Timer component is unmounted when not recording in App.tsx logic:
-        // {isRecording ? <Timer ... /> : <AppSelector ... />}
-        // So state is lost. We should lift state up or keep Timer mounted but hidden?
-        // Or just accept it resets? No, that's bad.
-        // Let's fix App.tsx to keep Timer state or move state up.
-        // For now, let's just fix the interval.
 
         return () => clearInterval(interval);
-    }, [isActive]);
+    }, [isActive, isPaused]);
+
+    const elapsedSeconds = (startTime && isActive)
+        ? Math.floor((now - startTime) / 1000)
+        : 0;
+
+    // Safety check for negative time (clock skew)
+    const displaySeconds = Math.max(0, elapsedSeconds);
 
     const formatTime = (totalSeconds: number) => {
         const mins = Math.floor(totalSeconds / 60);
@@ -37,12 +37,18 @@ export function Timer({ isActive }: TimerProps) {
     return (
         <div className="flex flex-col items-center justify-center py-2">
             <span className="text-4xl font-light text-white tracking-wider font-mono">
-                {formatTime(seconds)}
+                {formatTime(displaySeconds)}
             </span>
-            {isActive && (
+            {isActive && !isPaused && (
                 <div className="flex items-center gap-2 mt-2">
                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                     <span className="text-xs text-red-400 font-medium uppercase tracking-widest">Recording</span>
+                </div>
+            )}
+            {isPaused && (
+                <div className="flex items-center gap-2 mt-2">
+                    <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                    <span className="text-xs text-yellow-500 font-medium uppercase tracking-widest">Paused</span>
                 </div>
             )}
         </div>

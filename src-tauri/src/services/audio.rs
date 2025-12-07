@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use hound::{WavWriter, WavSpec};
 use ringbuf::HeapProducer;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::Sample;
 
 use super::mixer::AudioMixer;
 
@@ -123,7 +124,7 @@ impl AudioRecorder {
         Ok(())
     }
 
-    pub async fn start_recording(&mut self, pid: i32, output_path: PathBuf, mic_device_name: Option<String>) -> Result<(), String> {
+    pub async fn start_recording(&mut self, output_path: PathBuf, mic_device_name: Option<String>, _capture_system_audio: bool) -> Result<(), String> {
         self.stop_recording()?; // Ensure stopped
         self.paused.store(false, std::sync::atomic::Ordering::Relaxed);
 
@@ -145,12 +146,11 @@ impl AudioRecorder {
         *self.start_time.lock().unwrap() = Some(std::time::Instant::now());
 
         // 2. Setup Mixer
-        let sys_enabled = pid != -1;
-        let mic_enabled = if let Some(ref device_name) = mic_device_name {
-            device_name != "None"
-        } else {
-            false
-        };
+        let sys_enabled = true; // Always capture system audio per requirements
+        
+        // Mic is enabled unless explicitly set to "None" (string)
+        // If None (Option) or "Default", we interpret as enabled (System Default)
+        let mic_enabled = mic_device_name.as_deref().map_or(true, |n| n != "None");
 
         let (mixer, sys_prod, mic_prod, running) = AudioMixer::new(writer_arc.clone(), sys_enabled, mic_enabled);
         *self.mixer.lock().unwrap() = Some(mixer);
@@ -168,72 +168,128 @@ impl AudioRecorder {
 
         // 3. Setup Microphone (if requested)
         if mic_enabled {
-            if let Some(device_name) = mic_device_name {
-                 let mic_prod_mutex = Arc::new(Mutex::new(mic_prod));
-                *self.mic_producer.lock().unwrap() = Some(mic_prod_mutex.clone());
+             // Resolve device name: None or "Default" -> Use default device
+             let device_name = mic_device_name.as_deref().unwrap_or("Default");
+             
+             let mic_prod_mutex = Arc::new(Mutex::new(mic_prod));
+             *self.mic_producer.lock().unwrap() = Some(mic_prod_mutex.clone());
 
-                let host = cpal::default_host();
-                // Find device by name or default
-                let device = if device_name == "Default" {
-                    host.default_input_device()
+             let host = cpal::default_host();
+             
+             let device = if device_name == "Default" {
+                 host.default_input_device()
                 } else {
                     host.input_devices().map_err(|e| e.to_string())?
                         .find(|d| d.name().unwrap_or_default() == device_name)
                 };
 
                 if let Some(device) = device {
-                     let config = cpal::StreamConfig {
-                        channels: 2,
-                        sample_rate: cpal::SampleRate(48000),
-                        buffer_size: cpal::BufferSize::Default,
-                    };
+                     let supported_configs = device.supported_input_configs().map_err(|e| e.to_string())?;
+                     // Find F32 config if possible, else use first.
+                     // We prefer F32 > I16 > U16.
+                     // But we must respect the device's constraints.
+                     let best_config = supported_configs
+                         .max_by(|a, b| {
+                             // Naive preference logic
+                             use cpal::SampleFormat::*;
+                             match (a.sample_format(), b.sample_format()) {
+                                 (F32, _) => std::cmp::Ordering::Greater,
+                                 (_, F32) => std::cmp::Ordering::Less,
+                                 (I16, U16) => std::cmp::Ordering::Greater,
+                                 (U16, I16) => std::cmp::Ordering::Less,
+                                 _ => std::cmp::Ordering::Equal,
+                             }
+                         })
+                         .ok_or("No supported configs")?
+                         .with_max_sample_rate(); // Use max rate to minimize aliasing if we were resampling (we aren't yet really)
+                         
+                     let err_fn = move |err| {
+                         eprintln!("Mic stream error: {:?}", err);
+                     };
 
-                    let mic_paused = self.paused.clone();
-                    
-                    let mic_stream = device.build_input_stream(
-                        &config,
-                        move |data: &[f32], _: &_| {
+                     let mic_paused = self.paused.clone();
+                     let sample_format = best_config.sample_format();
+                     let config: cpal::StreamConfig = best_config.into();
+                     
+                     let channels = config.channels;
+                     
+                     let stream = match sample_format {
+                         cpal::SampleFormat::F32 => device.build_input_stream(&config, move |data: &[f32], _: &_| {
+                             if !mic_paused.load(std::sync::atomic::Ordering::Relaxed) {
+                                  if let Ok(mut prod) = mic_prod_mutex.lock() {
+                                     if channels == 1 {
+                                         for &sample in data {
+                                             let _ = prod.push(sample);
+                                             let _ = prod.push(sample);
+                                         }
+                                     } else {
+                                         for &sample in data { // First 2 channels
+                                             let _ = prod.push(sample);
+                                         }
+                                     }
+                                  }
+                             }
+                         }, err_fn, None),
+                         cpal::SampleFormat::I16 => device.build_input_stream(&config, move |data: &[i16], _: &_| {
                             if !mic_paused.load(std::sync::atomic::Ordering::Relaxed) {
                                 if let Ok(mut prod) = mic_prod_mutex.lock() {
-                                    for &sample in data {
-                                        let _ = prod.push(sample);
-                                    }
+                                   if channels == 1 {
+                                       for &sample in data {
+                                           let s: f32 = sample.to_sample();
+                                           let _ = prod.push(s);
+                                           let _ = prod.push(s);
+                                       }
+                                   } else {
+                                       for &sample in data {
+                                           let s: f32 = sample.to_sample();
+                                           let _ = prod.push(s);
+                                       }
+                                   }
                                 }
                             }
-                        },
-                        move |err| {
-                            eprintln!("Mic error: {:?}", err);
-                        },
-                        None
-                    );
-
-                    match mic_stream {
-                        Ok(stream) => {
-                            if let Ok(_) = stream.play() {
-                                self.mic_stream = Some(SendStream(stream));
+                        }, err_fn, None),
+                         cpal::SampleFormat::U16 => device.build_input_stream(&config, move |data: &[u16], _: &_| {
+                            if !mic_paused.load(std::sync::atomic::Ordering::Relaxed) {
+                                if let Ok(mut prod) = mic_prod_mutex.lock() {
+                                   if channels == 1 {
+                                       for &sample in data {
+                                           let s: f32 = sample.to_sample();
+                                           let _ = prod.push(s);
+                                           let _ = prod.push(s);
+                                       }
+                                   } else {
+                                       for &sample in data {
+                                           let s: f32 = sample.to_sample();
+                                           let _ = prod.push(s);
+                                       }
+                                   }
+                                }
                             }
-                        },
-                        Err(e) => eprintln!("Failed to start mic: {:?}", e),
-                    }
+                        }, err_fn, None),
+                        _ => return Err("Unsupported sample format".to_string()),
+                     };
+                     
+                     let stream = stream.map_err(|e| format!("Failed to build mic stream: {:?}", e))?;
+                     stream.play().map_err(|e| format!("Failed to play mic stream: {:?}", e))?;
+                     self.mic_stream = Some(SendStream(stream));
+
                 } else {
                     eprintln!("Requested mic device not found: {}", device_name);
                 }
-            }
+
         }
 
-        // 4. Setup System Audio (SCK) - Only if enabled
+        // 4. Setup System Audio (SCK) - Capture Main Display
         if sys_enabled {
             let content = SCShareableContent::current();
-            let window = content.windows.into_iter()
-                .find(|w| w.owning_application.as_ref().map(|a| a.process_id).unwrap_or(0) == pid)
-                .ok_or("No window found for target app")?;
+            // Use the first available display (usually main)
+            let display = content.displays.first().ok_or("No display found")?.clone();
 
-            let filter = SCContentFilter::new(InitParams::DesktopIndependentWindow(window));
+            let filter = SCContentFilter::new(InitParams::Display(display));
             let mut sc_config = SCStreamConfiguration::from_size(100, 100, false);
             sc_config.captures_audio = true;
-            sc_config.excludes_current_process_audio = false;
-            // Ensure 48kHz? SCK usually defaults to it.
-
+            sc_config.excludes_current_process_audio = true; // Avoid feedback loop if we play sounds
+            
             let sys_prod_mutex = Arc::new(Mutex::new(sys_prod));
             
             let mut stream = SCStream::new(filter, sc_config, ErrorHandler);

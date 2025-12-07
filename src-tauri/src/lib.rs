@@ -11,7 +11,6 @@ use tauri::{
 };
 use crate::services::storage::{StorageService, Settings, LedgerEntry};
 use crate::services::audio::AudioRecorder;
-use crate::services::discovery::RunnableApp;
 use crate::error::AppError;
 use validator::Validate;
 
@@ -19,30 +18,50 @@ struct AppState {
     recorder: Arc<Mutex<AudioRecorder>>,
     is_recording: Mutex<bool>,
     output_folder: Mutex<PathBuf>,
-    recording_app_pid: Mutex<Option<i32>>,
     current_recording_path: Mutex<Option<PathBuf>>,
 }
 
-
-
 #[tauri::command]
-async fn get_apps() -> Result<Vec<RunnableApp>, AppError> {
-    crate::services::discovery::get_running_meeting_apps().await.map_err(Into::into)
-}
-
-#[tauri::command]
-async fn start_recording_command(pid: i32, filename: Option<String>, mic_device: Option<String>, app_handle: AppHandle) -> Result<(), AppError> {
-    toggle_recording(&app_handle, pid, filename, mic_device).await;
+async fn start_recording_command(filename: Option<String>, mic_device: Option<String>, capture_system_audio: bool, app_handle: AppHandle) -> Result<(), AppError> {
+    toggle_recording(&app_handle, filename, mic_device, capture_system_audio).await;
     Ok(())
 }
 
 #[tauri::command]
-async fn delete_recording_command(path: String) -> Result<(), AppError> {
-    let path_buf = PathBuf::from(path);
-    if path_buf.exists() {
-        std::fs::remove_file(path_buf)?;
+async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult, AppError> {
+    let state = app_handle.state::<AppState>();
+    let mut is_recording = state.is_recording.lock().await;
+    let mut recorder = state.recorder.lock().await;
+    
+    println!("Stop command received. Is recording: {}", *is_recording);
+    
+    if *is_recording {
+        // Stop returns Result<f64, String>
+        let duration = recorder.stop_recording().map_err(|e| AppError::Unexpected(e))?;
+        
+        *is_recording = false;
+        println!("Recording stopped successfully. Duration: {:.2}s", duration);
+        
+        let folder = state.output_folder.lock().await.clone();
+        let folder_str = folder.to_string_lossy().to_string();
+        
+        let path_opt = state.current_recording_path.lock().await.clone();
+        let file_str = path_opt.map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+
+        return Ok(RecordingResult {
+            file_path: file_str,
+            folder_path: folder_str,
+            duration_sec: duration,
+        });
     }
-    Ok(())
+    Err(AppError::Logic("Not recording".to_string()))
+}
+
+#[derive(serde::Serialize)]
+struct RecordingResult {
+    file_path: String,
+    folder_path: String,
+    duration_sec: f64,
 }
 
 #[tauri::command]
@@ -73,45 +92,15 @@ async fn switch_microphone_command(device_name: String, app_handle: AppHandle) -
     recorder.switch_microphone(device_name).map_err(Into::into)
 }
 
-#[derive(serde::Serialize)]
-struct RecordingResult {
-    file_path: String,
-    folder_path: String,
-    duration_sec: f64,
-}
-
 #[tauri::command]
-async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult, AppError> {
-    let state = app_handle.state::<AppState>();
-    let mut is_recording = state.is_recording.lock().await;
-    let mut recorder = state.recorder.lock().await;
-    
-    println!("Stop command received. Is recording: {}", *is_recording);
-    
-    if *is_recording {
-        // Stop returns Result<f64, String>
-        let duration = recorder.stop_recording().map_err(|e| AppError::Unexpected(e))?;
-        
-        *is_recording = false;
-        *state.recording_app_pid.lock().await = None;
-        println!("Recording stopped successfully. Duration: {:.2}s", duration);
-        
-        let folder = state.output_folder.lock().await.clone();
-        let folder_str = folder.to_string_lossy().to_string();
-        
-        let path_opt = state.current_recording_path.lock().await.clone();
-        let file_str = path_opt.map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
-
-        return Ok(RecordingResult {
-            file_path: file_str,
-            folder_path: folder_str,
-            duration_sec: duration,
-        });
+async fn delete_recording_command(path: String) -> Result<(), AppError> {
+    let path_buf = PathBuf::from(path);
+    if path_buf.exists() {
+        std::fs::remove_file(path_buf)?;
     }
-    Err(AppError::Logic("Not recording".to_string()))
+    Ok(())
 }
 
-// Storage logic moved to services/storage.rs
 #[tauri::command]
 async fn add_recording_command(file_path: String, duration_sec: f64, app_handle: AppHandle) -> Result<LedgerEntry, AppError> {
     let mut entries = StorageService::load_ledger()?;
@@ -333,8 +322,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![
-            get_apps, 
+        .invoke_handler(tauri::generate_handler![ 
             start_recording_command, 
             stop_recording_command, 
             pause_recording_command, 
@@ -381,7 +369,6 @@ pub fn run() {
                 recorder: Arc::new(Mutex::new(AudioRecorder::new())),
                 is_recording: Mutex::new(false),
                 output_folder: Mutex::new(output_folder.clone()),
-                recording_app_pid: Mutex::new(None),
                 current_recording_path: Mutex::new(None),
             };
             app.manage(state);
@@ -426,9 +413,7 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-
-
-async fn toggle_recording(app: &AppHandle, pid: i32, filename: Option<String>, mic_device: Option<String>) {
+async fn toggle_recording(app: &AppHandle, filename: Option<String>, mic_device: Option<String>, capture_system_audio: bool) {
     let state = app.state::<AppState>();
     let mut is_recording = state.is_recording.lock().await;
     let mut recorder = state.recorder.lock().await;
@@ -439,7 +424,6 @@ async fn toggle_recording(app: &AppHandle, pid: i32, filename: Option<String>, m
             eprintln!("Failed to stop recording: {}", e);
         }
         *is_recording = false;
-        *state.recording_app_pid.lock().await = None;
         println!("Stopped recording");
     } else {
         // Start
@@ -452,12 +436,11 @@ async fn toggle_recording(app: &AppHandle, pid: i32, filename: Option<String>, m
         let name = if name.ends_with(".wav") { name } else { format!("{}.wav", name) };
         let path = folder.join(name);
         
-        match recorder.start_recording(pid, path.clone(), mic_device).await {
+        match recorder.start_recording(path.clone(), mic_device.clone(), capture_system_audio).await {
             Ok(_) => {
                 *is_recording = true;
-                *state.recording_app_pid.lock().await = Some(pid);
                 *state.current_recording_path.lock().await = Some(path);
-                println!("Started recording PID {}", pid);
+                println!("Started recording (System: {}, Mic: {:?})", capture_system_audio, mic_device);
             }
             Err(e) => eprintln!("Failed to start recording: {}", e),
         }

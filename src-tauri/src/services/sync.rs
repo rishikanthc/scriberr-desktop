@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Deserialize)]
 struct RemoteJob {
+    #[serde(rename = "id")]
     _id: String,
     status: String,
     transcript: Option<String>,

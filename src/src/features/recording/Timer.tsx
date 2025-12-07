@@ -34,7 +34,7 @@ export function Timer({ isActive }: TimerProps) {
     return (
         <div className="flex flex-col items-center">
             <motion.div
-                className="text-6xl font-mono font-medium text-white tracking-widest tabular-nums drop-shadow-lg"
+                className="text-5xl font-mono font-medium text-white tracking-widest tabular-nums drop-shadow-lg"
                 animate={{ opacity: isActive ? [1, 0.8, 1] : 0.5 }}
                 transition={{ duration: 2, repeat: isActive ? Infinity : 0, ease: "easeInOut" }}
             >

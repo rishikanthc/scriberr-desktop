@@ -4,9 +4,9 @@ import { Controls } from '../recording/Controls';
 import { Timer } from '../recording/Timer';
 import { useRecordingControls } from '../recording/api/useRecordingControls';
 import { useMicrophones } from '../recording/api/useMicrophones';
-import { AlertCircle, Volume2 } from 'lucide-react';
+import { AlertCircle, Mic } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import clsx from 'clsx';
+import { Visualizer } from './Visualizer';
 
 export function RecorderScreen() {
     const {
@@ -65,28 +65,44 @@ export function RecorderScreen() {
                 <AnimatePresence mode="wait">
                     {isRecording ? (
                         <motion.div
-                            key="timer"
+                            key="recording-state"
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.9 }}
-                            className="flex flex-col items-center"
+                            className="relative w-96 h-96 flex items-center justify-center"
                         >
-                            <Timer isActive={!isPaused} />
+                            {/* Visualizer Background - Absolute */}
+                            <div className="absolute inset-0 z-0">
+                                <Visualizer isActive={!isPaused} />
+                            </div>
+
+                            {/* Timer - Center Overlay */}
+                            <div className="z-10">
+                                <Timer isActive={!isPaused} />
+                            </div>
                         </motion.div>
                     ) : (
                         <motion.div
-                            key="mic-hero"
+                            key="idle-hero"
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="relative"
+                            className="relative flex items-center justify-center p-12"
                         >
-                            {/* Placeholder for Mic Visualizer */}
-                            <div className="w-48 h-48 rounded-full bg-glass-surface/30 border border-glass-border flex items-center justify-center">
-                                <div className="w-32 h-32 rounded-full bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-center">
-                                    <div className={clsx("w-3 h-3 rounded-full transition-colors duration-500", "bg-accent-primary")} />
+                            {/* Start Recording Button */}
+                            <button
+                                onClick={handleStart}
+                                className="group relative w-24 h-24 flex items-center justify-center rounded-full transition-transform duration-300 hover:scale-105 active:scale-95 focus:outline-none outline-none ring-0"
+                            >
+                                {/* Outer Ring */}
+                                <div className="absolute inset-0 rounded-full border-2 border-rose-500/30 group-hover:border-rose-500/50 transition-colors" />
+
+                                {/* Inner Circle (The Button) */}
+                                {/* Replaced blur div with ring/shadow on this element to avoid square artifacts */}
+                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center transition-all duration-300 shadow-[0_0_20px_rgba(244,63,94,0.3)] group-hover:shadow-[0_0_40px_rgba(244,63,94,0.6)]">
+                                    <Mic className="text-white w-8 h-8 opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all" />
                                 </div>
-                            </div>
+                            </button>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -95,16 +111,26 @@ export function RecorderScreen() {
             {/* Bottom Section: Controls & Mic */}
             <div className="w-full max-w-sm flex flex-col items-center gap-8 z-20 pb-12">
 
-                {/* Main Controls - Centered */}
-                <Controls
-                    isRecording={isRecording}
-                    isPaused={isPaused}
-                    onStart={handleStart}
-                    onStop={handleStop}
-                    onPause={() => pauseMutation.mutate()}
-                    onResume={() => resumeMutation.mutate()}
-                    disabled={false}
-                />
+                {/* Main Controls - Centered - ONLY SHOW WHEN RECORDING */}
+                <AnimatePresence>
+                    {isRecording && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                        >
+                            <Controls
+                                isRecording={isRecording}
+                                isPaused={isPaused}
+                                onStart={handleStart}
+                                onStop={handleStop}
+                                onPause={() => pauseMutation.mutate()}
+                                onResume={() => resumeMutation.mutate()}
+                                disabled={false}
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Mic Selector - Bottom pinned */}
                 <div className="w-full">
@@ -141,6 +167,6 @@ export function RecorderScreen() {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 }

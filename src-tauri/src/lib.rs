@@ -436,7 +436,7 @@ async fn toggle_recording(app: &AppHandle, filename: Option<String>, mic_device:
         let name = if name.ends_with(".wav") { name } else { format!("{}.wav", name) };
         let path = folder.join(name);
         
-        match recorder.start_recording(path.clone(), mic_device.clone(), capture_system_audio).await {
+        match recorder.start_recording(path.clone(), mic_device.clone(), capture_system_audio, app.clone()).await {
             Ok(_) => {
                 *is_recording = true;
                 *state.current_recording_path.lock().await = Some(path);

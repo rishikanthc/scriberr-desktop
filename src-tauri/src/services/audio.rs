@@ -124,7 +124,7 @@ impl AudioRecorder {
         Ok(())
     }
 
-    pub async fn start_recording(&mut self, output_path: PathBuf, mic_device_name: Option<String>, _capture_system_audio: bool) -> Result<(), String> {
+    pub async fn start_recording(&mut self, output_path: PathBuf, mic_device_name: Option<String>, _capture_system_audio: bool, app_handle: tauri::AppHandle) -> Result<(), String> {
         self.stop_recording()?; // Ensure stopped
         self.paused.store(false, std::sync::atomic::Ordering::Relaxed);
 
@@ -152,7 +152,7 @@ impl AudioRecorder {
         // If None (Option) or "Default", we interpret as enabled (System Default)
         let mic_enabled = mic_device_name.as_deref().map_or(true, |n| n != "None");
 
-        let (mixer, sys_prod, mic_prod, running) = AudioMixer::new(writer_arc.clone(), sys_enabled, mic_enabled);
+        let (mixer, sys_prod, mic_prod, running) = AudioMixer::new(writer_arc.clone(), sys_enabled, mic_enabled, app_handle);
         *self.mixer.lock().unwrap() = Some(mixer);
         self.mixer_running = running;
         

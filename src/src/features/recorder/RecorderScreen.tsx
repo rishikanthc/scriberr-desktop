@@ -49,7 +49,8 @@ export function RecorderScreen() {
     const handleStart = () => {
         startMutation.mutate({
             micDevice: selectedMic || undefined,
-            captureSystemAudio: includeSystemAudio
+            captureSystemAudio: includeSystemAudio,
+            filename: filename || undefined
         }, {
             onError: () => toast.error("Failed to start recording")
         });
@@ -78,25 +79,16 @@ export function RecorderScreen() {
 
             {/* Top Section - Filename Input */}
             <div className="w-full flex justify-center h-16 items-center z-20">
-                <AnimatePresence>
-                    {isRecording && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            className="relative group"
-                        >
-                            <input
-                                type="text"
-                                placeholder="Recording Name..."
-                                value={filename}
-                                onChange={(e) => setFilename(e.target.value)}
-                                className="bg-glass-input border border-glass-border text-white placeholder:text-white/30 text-center rounded-xl px-4 py-2 w-64 focus:w-80 transition-all duration-300 outline-none backdrop-blur-md focus:border-accent-primary focus:ring-1 focus:ring-accent-primary shadow-lg"
-                            />
-                            <Pencil size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none group-focus-within:text-white/50 transition-colors" />
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                <div className="relative group">
+                    <input
+                        type="text"
+                        placeholder="Recording Name..."
+                        value={filename}
+                        onChange={(e) => setFilename(e.target.value)}
+                        className="bg-glass-input border border-glass-border text-white placeholder:text-white/30 text-center rounded-xl px-4 py-2 w-64 focus:w-80 transition-all duration-300 outline-none backdrop-blur-md focus:border-accent-primary focus:ring-1 focus:ring-accent-primary shadow-lg"
+                    />
+                    <Pencil size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none group-focus-within:text-white/50 transition-colors" />
+                </div>
             </div>
 
 

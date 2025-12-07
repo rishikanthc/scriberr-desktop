@@ -35,6 +35,7 @@ cpal = "0.15.2"
 ringbuf = "0.3.3"
 reqwest = { version = "0.12.24", features = ["json", "multipart"] }
 uuid = { version = "1.19.0", features = ["v4", "serde"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "tls-native-tls"] }
 thiserror = "2.0.17"
 specta = { version = "=2.0.0-rc.20", features = ["serde", "derive"] }
 tauri-specta = { version = "=2.0.0-rc.20", features = ["derive", "javascript", "typescript"] }

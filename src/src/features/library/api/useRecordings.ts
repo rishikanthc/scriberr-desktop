@@ -36,3 +36,27 @@ export const useUploadRecording = () => {
         },
     });
 };
+
+export const useDownloadRecording = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (localId: string) => {
+            return await invoke<LedgerEntry>('download_recording_command', { localId });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['recordings'] });
+        },
+    });
+};
+
+export const useRemoveDownload = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (localId: string) => {
+            return await invoke<LedgerEntry>('remove_download_command', { localId });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['recordings'] });
+        },
+    });
+};

@@ -7,6 +7,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { LedgerEntry } from '../../types';
 
 // Inline formatDuration if not exists
+// Inline formatDuration if not exists
 const formatDuration = (seconds?: number) => {
     if (!seconds) return '00:00';
     const min = Math.floor(seconds / 60);
@@ -14,8 +15,9 @@ const formatDuration = (seconds?: number) => {
     return `${min}:${sec.toString().padStart(2, '0')}`;
 };
 
-const getFilename = (path: string) => {
-    return path.split(/[/\\]/).pop() || 'Unknown Recording';
+const getFilename = (path: string | null, title: string) => {
+    if (path) return path.split(/[/\\]/).pop() || title;
+    return title;
 };
 
 
@@ -45,8 +47,16 @@ export function RecordingList() {
             });
         });
 
+        const unlistenUpdatedPromise = listen<LedgerEntry>('recording-updated', (event) => {
+            queryClient.setQueryData<LedgerEntry[]>(['recordings'], (old) => {
+                if (!old) return old;
+                return old.map(rec => rec.local_id === event.payload.local_id ? event.payload : rec);
+            });
+        });
+
         return () => {
             unlistenPromise.then(unlisten => unlisten());
+            unlistenUpdatedPromise.then(unlisten => unlisten());
         };
     }, [queryClient]);
 
@@ -178,7 +188,7 @@ export function RecordingList() {
                                     </div>
 
                                     <div className="min-w-0 flex-1">
-                                        <div className="text-sm font-medium text-white/90 truncate">{getFilename(rec.file_path)}</div>
+                                        <div className="text-sm font-medium text-white/90 truncate">{getFilename(rec.local_file_path, rec.title)}</div>
                                         <div className="text-xs text-white/40 flex items-center gap-2 mt-0.5">
                                             <div className="flex items-center gap-1">
                                                 <Calendar size={10} />
@@ -193,21 +203,21 @@ export function RecordingList() {
                                     </div>
 
                                     <div className="flex items-center gap-2">
-                                        {isUploading && (
+                                        {(isUploading || rec.sync_status === 'UPLOADING' || rec.sync_status === 'PROCESSING_REMOTE') && (
                                             <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-200 text-[10px] font-medium animate-pulse">
                                                 <CloudUpload size={10} />
-                                                <span>Syncing...</span>
+                                                <span>{rec.sync_status === 'PROCESSING_REMOTE' ? 'Processing' : 'Syncing...'}</span>
                                             </div>
                                         )}
 
-                                        {rec.upload_status === 'uploaded' && !isUploading && (
+                                        {rec.sync_status === 'COMPLETED_SYNCED' && (
                                             <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/10 border border-green-500/20 text-green-200 text-[10px] font-medium">
                                                 <CheckCircle size={10} />
                                                 <span>Synced</span>
                                             </div>
                                         )}
 
-                                        {rec.upload_status === 'failed' && !isUploading && (
+                                        {rec.sync_status === 'FAILED' && !isUploading && (
                                             <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-500/10 border border-red-500/20 text-red-200 text-[10px] font-medium">
                                                 <AlertCircle size={10} />
                                                 <span>Failed</span>
@@ -215,7 +225,7 @@ export function RecordingList() {
                                         )}
 
                                         {/* Status: Pending or just empty if incomplete */}
-                                        {rec.upload_status !== 'uploaded' && rec.upload_status !== 'failed' && !isUploading && (
+                                        {rec.sync_status !== 'COMPLETED_SYNCED' && rec.sync_status !== 'FAILED' && !isUploading && rec.sync_status !== 'UPLOADING' && rec.sync_status !== 'PROCESSING_REMOTE' && (
                                             <div className="px-2"></div>
                                         )}
 
@@ -231,7 +241,7 @@ export function RecordingList() {
                                             {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                                         </button>
 
-                                        {rec.upload_status !== 'uploaded' && !isUploading && (
+                                        {rec.sync_status !== 'COMPLETED_SYNCED' && rec.sync_status !== 'PROCESSING_REMOTE' && !isUploading && (
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();

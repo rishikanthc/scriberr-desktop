@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { open } from '@tauri-apps/plugin-dialog';
-import { Sparkles, Server, Folder, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Server, Folder, Check, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface SettingsScreenProps {
@@ -11,7 +11,7 @@ interface SettingsScreenProps {
 
 import { useSettings, useSaveSettings, useTestConnection } from './api/useSettings';
 
-export function SettingsScreen({ onBack }: SettingsScreenProps) {
+export function SettingsScreen({ }: SettingsScreenProps) {
     const { data: settings, isLoading } = useSettings();
     const saveMutation = useSaveSettings();
     const testConnectionMutation = useTestConnection();

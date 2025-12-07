@@ -20,6 +20,8 @@ pub enum AppError {
     Logic(String),
     #[error("Unexpected Error: {0}")]
     Unexpected(String),
+    #[error("Database Error: {0}")]
+    Database(String),
 }
 
 impl From<std::io::Error> for AppError {

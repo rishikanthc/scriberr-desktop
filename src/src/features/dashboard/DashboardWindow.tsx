@@ -59,28 +59,34 @@ export function DashboardWindow() {
             </div>
 
             {/* Bottom Navigation Bar */}
-            <div className="h-20 shrink-0 flex items-center justify-center gap-12 bg-black/20 border-t border-white/5 backdrop-blur-md z-20">
-                <NavButton
-                    icon={<Folder size={20} />}
-                    isActive={currentView === 'recordings'}
-                    onClick={() => setCurrentView('recordings')}
-                    label="Library"
-                />
+            <div className="shrink-0 flex items-center justify-center pb-5 pt-3 z-20">
+                <div className="flex items-center gap-1 bg-stone-800/90 backdrop-blur-xl border border-white/10 rounded-full px-2 py-1.5 shadow-2xl">
+                    <NavButton
+                        icon={<Folder size={20} />}
+                        isActive={currentView === 'recordings'}
+                        onClick={() => setCurrentView('recordings')}
+                        label="Library"
+                    />
 
-                <NavButton
-                    icon={<Mic size={20} />}
-                    isActive={false}
-                    onClick={toggleRecorder}
-                    label="Recorder"
-                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                />
+                    <div className="w-px h-3 bg-white/10 mx-1" />
 
-                <NavButton
-                    icon={<Settings size={20} />}
-                    isActive={currentView === 'settings'}
-                    onClick={() => setCurrentView('settings')}
-                    label="Settings"
-                />
+                    <NavButton
+                        icon={<Mic size={20} />}
+                        isActive={false}
+                        onClick={toggleRecorder}
+                        label="Recorder"
+                        className="text-white/60 hover:text-red-400 hover:bg-transparent"
+                    />
+
+                    <div className="w-px h-3 bg-white/10 mx-1" />
+
+                    <NavButton
+                        icon={<Settings size={20} />}
+                        isActive={currentView === 'settings'}
+                        onClick={() => setCurrentView('settings')}
+                        label="Settings"
+                    />
+                </div>
             </div>
         </div>
     );
@@ -100,18 +106,12 @@ function NavButton({ icon, isActive, onClick, label, className }: NavButtonProps
             onClick={onClick}
             title={label}
             className={clsx(
-                "flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-200 group relative min-w-[64px]",
-                isActive ? "text-white" : "text-white/40 hover:text-white hover:bg-white/5",
+                "p-2 rounded-lg transition-all duration-300 relative group",
+                isActive ? "text-amber-400 bg-white/5" : "text-white/40 hover:text-white hover:bg-white/5",
                 className
             )}
         >
-            <div className={clsx(
-                "p-2 rounded-lg transition-all",
-                isActive ? "bg-white/10 shadow-sm" : ""
-            )}>
-                {icon}
-            </div>
-            <span className="text-[10px] font-medium tracking-wide opacity-80 uppercase">{label}</span>
+            {icon}
         </button>
     );
 }

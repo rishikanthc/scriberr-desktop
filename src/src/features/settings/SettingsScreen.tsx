@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { open } from '@tauri-apps/plugin-dialog';
-import { Save, Wifi, Loader2, Folder } from 'lucide-react';
+import { Sparkles, Server, Folder, Check, AlertCircle, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface SettingsScreenProps {
@@ -82,21 +82,21 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
         }
 
         setStatus('testing');
-        setMessage('Testing...');
+        setMessage('Testing connection...');
 
         testConnectionMutation.mutate({ url, apiKey }, {
             onSuccess: (success) => {
                 if (success) {
                     setStatus('success');
-                    setMessage('Connected');
+                    setMessage('Connection verified');
                 } else {
                     setStatus('error');
-                    setMessage('Failed');
+                    setMessage('Connection failed');
                 }
             },
             onError: () => {
                 setStatus('error');
-                setMessage('Error');
+                setMessage('Network error');
             }
         });
     };
@@ -117,65 +117,64 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
         }
 
         setStatus('saving');
-        setMessage('Saving...');
+        setMessage('Saving settings...');
 
         saveMutation.mutate({ scriberr_url: url, api_key: apiKey, output_path: outputPath }, {
             onSuccess: () => {
                 setStatus('success');
-                setMessage('Saved');
-                // Optional: Auto-go back or just stay? User said "save button should be enabled if changes made". 
-                // Creating a ghost button implies we stay.
+                setMessage('Settings saved');
             },
             onError: (error) => {
                 setStatus('error');
-                setMessage(`Failed: ${error}`);
+                setMessage(`Save failed: ${error}`);
             }
         });
     };
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-full text-white/50">
+            <div className="flex items-center justify-center h-full text-white/40">
                 <Loader2 className="animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full overflow-hidden px-2">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8 pt-2 shrink-0">
-                <h1 className="text-2xl font-bold text-white tracking-tight">Settings</h1>
+        <div className="flex flex-col h-full overflow-hidden px-1">
+            {/* Header: H1, SemiBold, -2% tracking */}
+            <div className="flex items-center justify-between mb-8 pt-3 shrink-0 px-1">
+                <h1 className="text-[28px] font-semibold text-white/95 tracking-tight leading-none">Settings</h1>
 
                 <button
                     onClick={handleSave}
                     disabled={!isDirty || status === 'saving'}
                     className={clsx(
-                        "p-2 rounded-full transition-all duration-300",
+                        "p-2.5 rounded-full transition-all duration-300 relative group",
                         isDirty
-                            ? "text-amber-400 hover:bg-amber-400/10 hover:scale-105 active:scale-95"
+                            ? "text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95"
                             : "text-white/20 cursor-not-allowed"
                     )}
                     title={isDirty ? "Save Changes" : "No changes to save"}
                 >
-                    {status === 'saving' ? (
-                        <Loader2 size={24} className="animate-spin" />
+                    {status === 'saving' || status === 'testing' ? (
+                        <Loader2 size={20} className="animate-spin" />
                     ) : (
-                        <Save size={24} />
+                        <Check size={20} strokeWidth={3} />
                     )}
                 </button>
             </div>
 
-            <div className="flex-1 flex flex-col gap-8 overflow-y-auto min-h-0 pr-2 pb-6">
+            <div className="flex-1 flex flex-col gap-8 overflow-y-auto min-h-0 pr-1 pb-6 scrollbar-hide">
 
                 {/* Connection Section */}
                 <div className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-white/40 uppercase tracking-widest">Connection</label>
+                    <div className="flex items-center justify-between px-1">
+                        {/* H3/Section Label: 12px, SemiBold/Bold, +5% tracking */}
+                        <label className="text-[11px] font-bold text-white/50 uppercase tracking-[0.05em]">Connection</label>
 
                         {/* Status/Test Indicator */}
                         <div className="flex items-center gap-3">
-                            {/* Status Text */}
+                            {/* Status Text: UI Body/Micro */}
                             <AnimatePresence mode="wait">
                                 {status !== 'idle' && (
                                     <motion.span
@@ -183,8 +182,8 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0 }}
                                         className={clsx(
-                                            "text-xs font-medium",
-                                            status === 'success' && "text-green-400",
+                                            "text-[11px] font-semibold tracking-wide",
+                                            status === 'success' && "text-emerald-400",
                                             status === 'error' && "text-red-400",
                                             (status === 'testing' || status === 'saving') && "text-blue-400"
                                         )}
@@ -194,38 +193,42 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                                 )}
                             </AnimatePresence>
 
-                            {/* Test Button */}
+                            {/* Test Button - Icon Only */}
                             <button
                                 onClick={handleTestConnection}
                                 disabled={status === 'testing' || !url || !apiKey}
-                                className="text-white/40 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                title="Test Connection"
+                                className="text-white/40 hover:text-white transition-colors disabled:opacity-20 disabled:cursor-not-allowed p-1"
+                                title="Test Network Connection"
                             >
-                                <Wifi size={18} />
+                                <Server size={18} />
                             </button>
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-3">
-                        <div className="group bg-white/5 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-white/20 border border-white/5 rounded-xl transition-all overflow-hidden">
-                            <label className="block px-4 pt-2.5 text-[10px] text-white/40 font-medium">SCRIBERR URL</label>
+                        {/* URL Input */}
+                        <div className="group bg-white/5 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-white/10 border border-white/5 rounded-xl transition-all overflow-hidden flex flex-col justify-center min-h-[56px] px-4">
+                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.05em] mb-0.5 group-focus-within:text-white/60 transition-colors">Server URL</label>
                             <input
                                 type="text"
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
-                                className="w-full bg-transparent border-none px-4 pb-3 pt-0.5 text-sm text-white placeholder-white/20 focus:ring-0 focus:outline-none font-medium"
+                                className="w-full bg-transparent border-none p-0 text-[15px] text-white/90 placeholder-white/20 focus:ring-0 focus:outline-none font-medium leading-relaxed"
                                 placeholder="http://localhost:8080"
+                                spellCheck={false}
                             />
                         </div>
 
-                        <div className="group bg-white/5 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-white/20 border border-white/5 rounded-xl transition-all overflow-hidden">
-                            <label className="block px-4 pt-2.5 text-[10px] text-white/40 font-medium">API KEY</label>
+                        {/* API Key Input */}
+                        <div className="group bg-white/5 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-white/10 border border-white/5 rounded-xl transition-all overflow-hidden flex flex-col justify-center min-h-[56px] px-4">
+                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.05em] mb-0.5 group-focus-within:text-white/60 transition-colors">API Key</label>
                             <input
                                 type="password"
                                 value={apiKey}
                                 onChange={(e) => setApiKey(e.target.value)}
-                                className="w-full bg-transparent border-none px-4 pb-3 pt-0.5 text-sm text-white placeholder-white/20 focus:ring-0 focus:outline-none font-mono"
+                                className="w-full bg-transparent border-none p-0 text-[15px] text-white/90 placeholder-white/20 focus:ring-0 focus:outline-none font-medium font-mono leading-relaxed" // Monospace for API key
                                 placeholder="sk-..."
+                                spellCheck={false}
                             />
                         </div>
                     </div>
@@ -233,20 +236,29 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
 
                 {/* Storage Section */}
                 <div className="flex flex-col gap-4">
-                    <label className="text-xs font-semibold text-white/40 uppercase tracking-widest">Storage</label>
+                    <label className="px-1 text-[11px] font-bold text-white/50 uppercase tracking-[0.05em]">Storage</label>
 
                     <div className="flex gap-2">
-                        <div className="flex-1 group bg-white/5 border border-white/5 rounded-xl transition-all overflow-hidden flex items-center px-4 py-3">
-                            <span className="text-sm text-white/80 font-mono truncate">{outputPath || 'Default'}</span>
+                        <div className="flex-1 group bg-white/5 border border-white/5 rounded-xl transition-all overflow-hidden flex flex-col justify-center min-h-[56px] px-4">
+                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.05em] mb-0.5">Location</label>
+                            <span className="text-[14px] text-white/80 font-mono truncate leading-relaxed">{outputPath || 'Default'}</span>
                         </div>
                         <button
                             onClick={handleBrowse}
-                            className="bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 hover:text-white p-3 rounded-xl transition-colors shrink-0"
+                            className="bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 hover:text-white w-[56px] h-[56px] rounded-xl transition-all active:scale-95 flex items-center justify-center shrink-0"
                             title="Select Folder"
                         >
-                            <Folder size={20} />
+                            <Folder size={22} className="opacity-80" />
                         </button>
                     </div>
+                </div>
+
+                {/* Info / Version (Deference) */}
+                <div className="mt-auto px-1 opacity-30 hover:opacity-100 transition-opacity">
+                    <p className="text-[10px] font-medium text-white/70 flex items-center gap-1.5">
+                        <Sparkles size={10} />
+                        <span>Scriberr Companion v0.1.0</span>
+                    </p>
                 </div>
 
             </div>

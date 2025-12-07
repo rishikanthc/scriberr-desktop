@@ -58,7 +58,7 @@ export function RecorderWindow() {
 
 
     return (
-        <div className="h-screen w-screen bg-stone-700/85 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none">
+        <div className="h-screen w-screen bg-stone-900/80 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-stone-200 select-none relative font-sans antialiased selection:bg-orange-500/30">
             <TitleBar variant="recorder" />
 
             <div className="flex-1 flex flex-col items-center justify-center p-6 gap-8 relative">

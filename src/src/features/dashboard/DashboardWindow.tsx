@@ -26,7 +26,7 @@ export function DashboardWindow() {
     };
 
     return (
-        <div className="h-screen w-screen bg-stone-700/85 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white select-none relative">
+        <div className="h-screen w-screen bg-stone-800/80 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-stone-200 select-none relative font-sans antialiased selection:bg-orange-500/30">
             <TitleBar />
 
             {/* Content Area */}

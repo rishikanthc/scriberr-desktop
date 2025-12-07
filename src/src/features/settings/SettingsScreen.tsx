@@ -140,19 +140,19 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
     }
 
     return (
-        <div className="flex flex-col h-full overflow-hidden px-1">
+        <div className="flex flex-col h-full overflow-hidden px-4">
             {/* Header: H1, SemiBold, -2% tracking */}
-            <div className="flex items-center justify-between mb-8 pt-3 shrink-0 px-1">
-                <h1 className="text-[28px] font-semibold text-white/95 tracking-tight leading-none">Settings</h1>
+            <div className="flex items-center justify-between mb-8 pt-6 shrink-0">
+                <h1 className="text-[28px] font-semibold text-white tracking-tight leading-none drop-shadow-md">Settings</h1>
 
                 <button
                     onClick={handleSave}
                     disabled={!isDirty || status === 'saving'}
                     className={clsx(
-                        "p-2.5 rounded-full transition-all duration-300 relative group",
+                        "p-2.5 rounded-full transition-all duration-300 relative group border",
                         isDirty
-                            ? "text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95"
-                            : "text-white/20 cursor-not-allowed"
+                            ? "bg-orange-500 border-orange-400 text-white shadow-[0_0_15px_rgba(255,140,0,0.3)] hover:bg-[#FF9F2D] hover:shadow-[0_0_20px_rgba(255,140,0,0.5)] active:scale-95"
+                            : "bg-white/5 border-white/10 text-white/20 cursor-not-allowed"
                     )}
                     title={isDirty ? "Save Changes" : "No changes to save"}
                 >
@@ -164,13 +164,13 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                 </button>
             </div>
 
-            <div className="flex-1 flex flex-col gap-8 overflow-y-auto min-h-0 pr-1 pb-6 scrollbar-hide">
+            <div className="flex-1 flex flex-col gap-6 overflow-y-auto min-h-0 pb-6 scrollbar-hide">
 
-                {/* Connection Section */}
-                <div className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between px-1">
-                        {/* H3/Section Label: 12px, SemiBold/Bold, +5% tracking */}
-                        <label className="text-[11px] font-bold text-white/50 uppercase tracking-[0.05em]">Connection</label>
+                {/* Connection Card */}
+                <div className="bg-stone-800/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col gap-6">
+                    <div className="flex items-center justify-between">
+                        {/* H3/Section Label */}
+                        <label className="text-xs font-bold text-stone-400 uppercase tracking-widest">Connection</label>
 
                         {/* Status/Test Indicator */}
                         <div className="flex items-center gap-3">
@@ -182,7 +182,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0 }}
                                         className={clsx(
-                                            "text-[11px] font-semibold tracking-wide",
+                                            "text-xs font-semibold tracking-wide",
                                             status === 'success' && "text-emerald-400",
                                             status === 'error' && "text-red-400",
                                             (status === 'testing' || status === 'saving') && "text-blue-400"
@@ -197,7 +197,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                             <button
                                 onClick={handleTestConnection}
                                 disabled={status === 'testing' || !url || !apiKey}
-                                className="text-white/40 hover:text-white transition-colors disabled:opacity-20 disabled:cursor-not-allowed p-1"
+                                className="text-stone-400 hover:text-white transition-colors disabled:opacity-20 disabled:cursor-not-allowed p-1"
                                 title="Test Network Connection"
                             >
                                 <Server size={18} />
@@ -205,28 +205,28 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-4">
                         {/* URL Input */}
-                        <div className="group bg-white/5 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-white/10 border border-white/5 rounded-xl transition-all overflow-hidden flex flex-col justify-center min-h-[56px] px-4">
-                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.05em] mb-0.5 group-focus-within:text-white/60 transition-colors">Server URL</label>
+                        <div className="group relative">
+                            <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1.5 block group-focus-within:text-orange-500/80 transition-colors">Server URL</label>
                             <input
                                 type="text"
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
-                                className="w-full bg-transparent border-none p-0 text-[15px] text-white/90 placeholder-white/20 focus:ring-0 focus:outline-none font-medium leading-relaxed"
+                                className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-[15px] text-white placeholder-stone-600 focus:outline-none focus:border-orange-500/50 focus:bg-black/40 transition-all duration-300"
                                 placeholder="http://localhost:8080"
                                 spellCheck={false}
                             />
                         </div>
 
                         {/* API Key Input */}
-                        <div className="group bg-white/5 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-white/10 border border-white/5 rounded-xl transition-all overflow-hidden flex flex-col justify-center min-h-[56px] px-4">
-                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.05em] mb-0.5 group-focus-within:text-white/60 transition-colors">API Key</label>
+                        <div className="group relative">
+                            <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1.5 block group-focus-within:text-orange-500/80 transition-colors">API Key</label>
                             <input
                                 type="password"
                                 value={apiKey}
                                 onChange={(e) => setApiKey(e.target.value)}
-                                className="w-full bg-transparent border-none p-0 text-[15px] text-white/90 placeholder-white/20 focus:ring-0 focus:outline-none font-medium font-mono leading-relaxed" // Monospace for API key
+                                className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-[15px] text-white placeholder-stone-600 focus:outline-none focus:border-orange-500/50 focus:bg-black/40 transition-all duration-300 font-mono"
                                 placeholder="sk-..."
                                 spellCheck={false}
                             />
@@ -234,33 +234,37 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
                     </div>
                 </div>
 
-                {/* Storage Section */}
-                <div className="flex flex-col gap-4">
-                    <label className="px-1 text-[11px] font-bold text-white/50 uppercase tracking-[0.05em]">Storage</label>
+                {/* Storage Card */}
+                <div className="bg-stone-800/60 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col gap-6">
+                    <label className="text-xs font-bold text-stone-400 uppercase tracking-widest">Storage</label>
 
-                    <div className="flex gap-2">
-                        <div className="flex-1 group bg-white/5 border border-white/5 rounded-xl transition-all overflow-hidden flex flex-col justify-center min-h-[56px] px-4">
-                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.05em] mb-0.5">Location</label>
-                            <span className="text-[14px] text-white/80 font-mono truncate leading-relaxed">{outputPath || 'Default'}</span>
+                    <div className="flex gap-3">
+                        <div className="flex-1 group relative">
+                            <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1.5 block">Location</label>
+                            <div className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 text-[14px] text-stone-300 font-mono truncate min-h-[48px] flex items-center">
+                                {outputPath || 'Default'}
+                            </div>
                         </div>
-                        <button
-                            onClick={handleBrowse}
-                            className="bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 hover:text-white w-[56px] h-[56px] rounded-xl transition-all active:scale-95 flex items-center justify-center shrink-0"
-                            title="Select Folder"
-                        >
-                            <Folder size={22} className="opacity-80" />
-                        </button>
+                        <div className="flex flex-col justify-end">
+                            <button
+                                onClick={handleBrowse}
+                                className="bg-white/5 hover:bg-white/10 border border-white/10 text-stone-400 hover:text-white w-[48px] h-[48px] rounded-lg transition-all active:scale-95 flex items-center justify-center shrink-0"
+                                title="Select Folder"
+                            >
+                                <Folder size={20} />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                {/* Info / Version (Deference) */}
-                <div className="mt-auto px-1 opacity-30 hover:opacity-100 transition-opacity">
-                    <p className="text-[10px] font-medium text-white/70 flex items-center gap-1.5">
-                        <Sparkles size={10} />
-                        <span>Scriberr Companion v0.1.0</span>
-                    </p>
-                </div>
+            </div>
 
+            {/* Footer Version */}
+            <div className="mt-auto pb-4 pl-1 opacity-30 hover:opacity-100 transition-opacity">
+                <p className="text-[10px] font-medium text-white/50 flex items-center gap-1.5">
+                    <Sparkles size={10} />
+                    <span>Scriberr Companion v0.1.0</span>
+                </p>
             </div>
         </div>
     );

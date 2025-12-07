@@ -23,10 +23,7 @@ export function TitleBar({ onClose }: TitleBarProps) {
             <div className="flex items-center gap-2 pointer-events-none">
                 <img src={logoIcon} alt="Scriberr" className="h-8 w-8 drop-shadow-lg p-0 m-0" />
                 <div className="flex flex-col justify-center h-full p-0">
-                    <ScriberrTextLogo color="#ffffff" className="h-4 w-auto mb-0.5 pointer-events-none" />
-                    <span className="text-[8px] font-bold tracking-[0.3em] text-white/50 font-sans leading-none flex justify-center items-center">
-                        COMPANION
-                    </span>
+                    <ScriberrTextLogo color="#ffffff" className="h-5 w-auto mb-0.5 pointer-events-none" />
                 </div>
             </div>
 

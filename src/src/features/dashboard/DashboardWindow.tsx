@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, Mic, Folder } from 'lucide-react';
+import { Settings, Mic, Folder, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { RecordingList } from '../library/RecordingList';
@@ -56,6 +56,14 @@ export function DashboardWindow() {
                         </motion.div>
                     )}
                 </AnimatePresence>
+            </div>
+
+            {/* Version Footer */}
+            <div className="absolute bottom-4 left-5 opacity-30 hover:opacity-100 transition-opacity z-30 pointer-events-auto">
+                <p className="text-[10px] font-medium text-stone-500 flex items-center gap-1.5 cursor-default">
+                    <Sparkles size={10} />
+                    <span>v0.1.0</span>
+                </p>
             </div>
 
             {/* Bottom Navigation Bar */}

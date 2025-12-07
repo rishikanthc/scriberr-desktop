@@ -10,7 +10,7 @@ CREATE TABLE cached_recordings (
     sync_status TEXT NOT NULL, -- 'DRAFT_READY', 'UPLOADING', 'PROCESSING_REMOTE', 'COMPLETED_SYNCED', 'FAILED'
     
     -- Paths / URLs
-    local_file_path TEXT, -- Original capture path (nullable after prune)
+    local_file_path TEXT UNIQUE, -- Original capture path (nullable after prune)
     remote_audio_url TEXT,
     
     -- Hybrid Storage / Pinning

@@ -19,8 +19,7 @@ export function RecorderScreen() {
         startMutation,
         stopMutation,
         pauseMutation,
-        resumeMutation,
-        addToLedger
+        resumeMutation
     } = useRecordingControls();
 
     const {
@@ -58,11 +57,9 @@ export function RecorderScreen() {
 
     const handleStop = () => {
         stopMutation.mutate(filename || undefined, {
-            onSuccess: (data) => {
-                addToLedger.mutate({
-                    filePath: data.file_path,
-                    durationSec: data.duration_sec
-                });
+            onSuccess: () => {
+                // addToLedger handled by stop_recording_command backend logic now
+                // addToLedger.mutate(...) removed to prevent duplicates
                 toast.success("Recording saved", {
                     description: filename ? `Saved as ${filename}.wav` : "Saved successfully"
                 });

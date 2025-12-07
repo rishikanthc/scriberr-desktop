@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Manager, AppHandle,
+    Manager, AppHandle, Emitter,
 };
 use crate::services::storage::{StorageService, Settings};
 use crate::services::audio::AudioRecorder;
@@ -45,11 +45,13 @@ async fn stop_recording_command(app_handle: AppHandle, filename: Option<String>)
     
     // 2. Create Draft in DB
     let file_name = final_path.file_name().unwrap_or_default().to_string_lossy().to_string();
-    let _ = state.db.create_draft(
+    let recording = state.db.create_draft(
         file_name,
         duration_sec,
         file_path.clone()
     ).await?;
+
+    let _ = app_handle.emit("recording-added", &recording);
 
     Ok(RecordingResult {
         file_path,
@@ -457,8 +459,11 @@ pub fn run() {
             ])?;
 
             let app_handle = app.handle().clone();
-            let app_config_dir = app.path().app_config_dir().unwrap_or(PathBuf::from("/"));
-            let db_path = app_config_dir.join("scriberr.db");
+             
+             // Manually construct path to match StorageService and user requirement for ~/.config/scriberr-companion
+             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+             let config_dir = PathBuf::from(home).join(".config").join("scriberr-companion");
+             let db_path = config_dir.join("scriberr.db");
 
             let db = tauri::async_runtime::block_on(async {
                 DatabaseService::new(db_path).await

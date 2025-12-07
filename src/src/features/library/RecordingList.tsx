@@ -43,7 +43,9 @@ export function RecordingList() {
     useEffect(() => {
         const unlistenPromise = listen<LedgerEntry>('recording-added', (event) => {
             queryClient.setQueryData<LedgerEntry[]>(['recordings'], (old) => {
-                return old ? [event.payload, ...old] : [event.payload];
+                if (!old) return [event.payload];
+                if (old.some(r => r.local_id === event.payload.local_id)) return old;
+                return [event.payload, ...old];
             });
         });
 

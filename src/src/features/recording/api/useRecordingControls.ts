@@ -64,6 +64,7 @@ export const useRecordingControls = () => {
             setIsPaused(false);
             setRecordingDuration(data.duration_sec);
             queryClient.invalidateQueries({ queryKey: ['recordingStatus'] });
+            queryClient.invalidateQueries({ queryKey: ['recordings'] });
         }
     });
 

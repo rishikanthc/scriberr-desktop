@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { open } from '@tauri-apps/plugin-dialog';
-import { ArrowLeft, Save, Wifi, Loader2, CheckCircle, AlertCircle, Folder } from 'lucide-react';
+import { Save, Wifi, Loader2, Folder } from 'lucide-react';
 import clsx from 'clsx';
-import logo from '../../assets/logo.svg';
 
 interface SettingsScreenProps {
     onBack: () => void;
@@ -16,7 +16,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
     const saveMutation = useSaveSettings();
     const testConnectionMutation = useTestConnection();
 
-    // Local state for form editing (initialized from settings when available)
+    // Local state for form editing
     const [url, setUrl] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [outputPath, setOutputPath] = useState('');
@@ -25,6 +25,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
     const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error' | 'saving'>('idle');
     const [message, setMessage] = useState('');
 
+    // Initialize state
     useEffect(() => {
         if (settings) {
             setUrl(settings.scriberr_url);
@@ -32,6 +33,13 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             setOutputPath(settings.output_path);
         }
     }, [settings]);
+
+    // Dirty state detection
+    const isDirty = settings ? (
+        url !== settings.scriberr_url ||
+        apiKey !== settings.api_key ||
+        outputPath !== settings.output_path
+    ) : false;
 
     const validateUrl = (value: string) => {
         try {
@@ -63,63 +71,64 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
     const handleTestConnection = async () => {
         if (!url || !apiKey) {
             setStatus('error');
-            setMessage('Please fill in all fields');
+            setMessage('Missing credentials');
             return;
         }
 
         if (!validateUrl(url)) {
             setStatus('error');
-            setMessage('Invalid URL format (e.g., http://localhost:8080)');
+            setMessage('Invalid URL');
             return;
         }
 
         setStatus('testing');
-        setMessage('Testing connection...');
+        setMessage('Testing...');
 
         testConnectionMutation.mutate({ url, apiKey }, {
             onSuccess: (success) => {
                 if (success) {
                     setStatus('success');
-                    setMessage('Connected successfully!');
+                    setMessage('Connected');
                 } else {
                     setStatus('error');
-                    setMessage('Connection failed. Check URL and API Key.');
+                    setMessage('Failed');
                 }
             },
-            onError: (error) => {
+            onError: () => {
                 setStatus('error');
-                setMessage(`Connection error: ${error}`);
+                setMessage('Error');
             }
         });
     };
 
     const handleSave = async () => {
+        if (!isDirty) return;
+
         if (!url || !apiKey || !outputPath) {
             setStatus('error');
-            setMessage('Please fill in all fields');
+            setMessage('Missing fields');
             return;
         }
 
         if (!validateUrl(url)) {
             setStatus('error');
-            setMessage('Invalid URL format');
+            setMessage('Invalid URL');
             return;
         }
 
         setStatus('saving');
-        setMessage('Saving settings (moving files if needed)...');
+        setMessage('Saving...');
 
         saveMutation.mutate({ scriberr_url: url, api_key: apiKey, output_path: outputPath }, {
             onSuccess: () => {
                 setStatus('success');
-                setMessage('Settings saved!');
-                setTimeout(() => {
-                    onBack();
-                }, 1000);
+                setMessage('Saved');
+                // Optional: Auto-go back or just stay? User said "save button should be enabled if changes made". 
+                // Creating a ghost button implies we stay.
             },
             onError: (error) => {
                 setStatus('error');
-                setMessage(`Failed to save: ${error}`);
+                setMessage(`Failed: ${error}`);
             }
         });
     };
@@ -133,105 +142,113 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
     }
 
     return (
-        <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex flex-col h-full overflow-hidden px-2">
             {/* Header */}
-            <div className="flex items-center gap-2 mb-2 shrink-0">
+            <div className="flex items-center justify-between mb-8 pt-2 shrink-0">
+                <h1 className="text-2xl font-bold text-white tracking-tight">Settings</h1>
+
                 <button
-                    onClick={onBack}
-                    className="text-white/60 hover:text-white transition-colors p-1 -ml-1 rounded-lg hover:bg-white/10"
+                    onClick={handleSave}
+                    disabled={!isDirty || status === 'saving'}
+                    className={clsx(
+                        "p-2 rounded-full transition-all duration-300",
+                        isDirty
+                            ? "text-amber-400 hover:bg-amber-400/10 hover:scale-105 active:scale-95"
+                            : "text-white/20 cursor-not-allowed"
+                    )}
+                    title={isDirty ? "Save Changes" : "No changes to save"}
                 >
-                    <ArrowLeft size={18} />
+                    {status === 'saving' ? (
+                        <Loader2 size={24} className="animate-spin" />
+                    ) : (
+                        <Save size={24} />
+                    )}
                 </button>
-                <span className="text-base font-medium text-white/90">Settings</span>
-                <div className="ml-auto opacity-50">
-                    <img src={logo} alt="Scriberr" className="h-4 w-auto" />
-                </div>
             </div>
 
-            <div className="flex-1 flex flex-col gap-4 overflow-y-auto min-h-0 pr-1 flex flex-col gap-4">
-                {/* URL Input */}
-                <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-medium text-white/60 uppercase tracking-wider">Scriberr URL</label>
-                    <input
-                        type="text"
-                        value={url}
-                        onChange={(e) => {
-                            setUrl(e.target.value);
-                            setStatus('idle');
-                            setMessage('');
-                        }}
-                        className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-white/20 focus:bg-black/30 transition-all backdrop-blur-sm"
-                        placeholder="http://localhost:8080"
-                    />
+            <div className="flex-1 flex flex-col gap-8 overflow-y-auto min-h-0 pr-2 pb-6">
+
+                {/* Connection Section */}
+                <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-white/40 uppercase tracking-widest">Connection</label>
+
+                        {/* Status/Test Indicator */}
+                        <div className="flex items-center gap-3">
+                            {/* Status Text */}
+                            <AnimatePresence mode="wait">
+                                {status !== 'idle' && (
+                                    <motion.span
+                                        initial={{ opacity: 0, x: 10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0 }}
+                                        className={clsx(
+                                            "text-xs font-medium",
+                                            status === 'success' && "text-green-400",
+                                            status === 'error' && "text-red-400",
+                                            (status === 'testing' || status === 'saving') && "text-blue-400"
+                                        )}
+                                    >
+                                        {message}
+                                    </motion.span>
+                                )}
+                            </AnimatePresence>
+
+                            {/* Test Button */}
+                            <button
+                                onClick={handleTestConnection}
+                                disabled={status === 'testing' || !url || !apiKey}
+                                className="text-white/40 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Test Connection"
+                            >
+                                <Wifi size={18} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                        <div className="group bg-white/5 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-white/20 border border-white/5 rounded-xl transition-all overflow-hidden">
+                            <label className="block px-4 pt-2.5 text-[10px] text-white/40 font-medium">SCRIBERR URL</label>
+                            <input
+                                type="text"
+                                value={url}
+                                onChange={(e) => setUrl(e.target.value)}
+                                className="w-full bg-transparent border-none px-4 pb-3 pt-0.5 text-sm text-white placeholder-white/20 focus:ring-0 focus:outline-none font-medium"
+                                placeholder="http://localhost:8080"
+                            />
+                        </div>
+
+                        <div className="group bg-white/5 focus-within:bg-white/10 focus-within:ring-1 focus-within:ring-white/20 border border-white/5 rounded-xl transition-all overflow-hidden">
+                            <label className="block px-4 pt-2.5 text-[10px] text-white/40 font-medium">API KEY</label>
+                            <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                className="w-full bg-transparent border-none px-4 pb-3 pt-0.5 text-sm text-white placeholder-white/20 focus:ring-0 focus:outline-none font-mono"
+                                placeholder="sk-..."
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                {/* API Key Input */}
-                <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-medium text-white/60 uppercase tracking-wider">API Key</label>
-                    <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => {
-                            setApiKey(e.target.value);
-                            setStatus('idle');
-                            setMessage('');
-                        }}
-                        className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-white/20 focus:bg-black/30 transition-all backdrop-blur-sm font-mono"
-                        placeholder="sk-..."
-                    />
-                </div>
+                {/* Storage Section */}
+                <div className="flex flex-col gap-4">
+                    <label className="text-xs font-semibold text-white/40 uppercase tracking-widest">Storage</label>
 
-                {/* Storage Location Input */}
-                <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-medium text-white/60 uppercase tracking-wider">Storage Location</label>
                     <div className="flex gap-2">
-                        <div className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 truncate font-mono flex items-center">
-                            <span className="truncate">{outputPath || 'Default'}</span>
+                        <div className="flex-1 group bg-white/5 border border-white/5 rounded-xl transition-all overflow-hidden flex items-center px-4 py-3">
+                            <span className="text-sm text-white/80 font-mono truncate">{outputPath || 'Default'}</span>
                         </div>
                         <button
                             onClick={handleBrowse}
-                            className="bg-white/10 hover:bg-white/20 border border-white/10 text-white p-2 rounded-lg transition-colors"
+                            className="bg-white/5 hover:bg-white/10 border border-white/5 text-white/60 hover:text-white p-3 rounded-xl transition-colors shrink-0"
                             title="Select Folder"
                         >
-                            <Folder size={18} />
+                            <Folder size={20} />
                         </button>
                     </div>
                 </div>
 
-                {/* Status Message */}
-                {status !== 'idle' && (
-                    <div className={clsx(
-                        "flex items-center gap-2 text-xs p-2.5 rounded-lg backdrop-blur-md border",
-                        (status === 'testing' || status === 'saving') && "bg-blue-500/10 border-blue-500/20 text-blue-200",
-                        status === 'success' && "bg-green-500/10 border-green-500/20 text-green-200",
-                        status === 'error' && "bg-red-500/10 border-red-500/20 text-red-200"
-                    )}>
-                        {(status === 'testing' || status === 'saving') && <Loader2 size={14} className="animate-spin" />}
-                        {status === 'success' && <CheckCircle size={14} />}
-                        {status === 'error' && <AlertCircle size={14} />}
-                        <span>{message}</span>
-                    </div>
-                )}
-            </div>
-
-            <div className="mt-4 flex flex-col gap-2 shrink-0">
-                <button
-                    onClick={handleTestConnection}
-                    disabled={status === 'testing' || status === 'saving' || !url || !apiKey}
-                    className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 text-sm font-medium rounded-lg py-2.5 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Wifi size={16} />
-                    Test Connection
-                </button>
-
-                <button
-                    onClick={handleSave}
-                    disabled={status === 'testing' || status === 'saving' || !url || !apiKey}
-                    className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-medium rounded-lg py-2.5 transition-all active:scale-[0.98] shadow-lg backdrop-blur-md disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Save size={16} />
-                    Save Settings
-                </button>
             </div>
         </div>
     );

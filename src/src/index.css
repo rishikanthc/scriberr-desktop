@@ -1,8 +1,49 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+@theme {
+  /* The "Warm Stone" Palette */
+
+  /* Layer 1: App Shell (User Adjusted) */
+  /* Now Lighter: Stone-800 gives a warm, deep grey/brown canvas */
+  --color-glass-base: color-mix(in srgb, var(--color-stone-800) 80%, transparent);
+
+  /* Layer 2: Panels/Cards (Must be lighter than Layer 1) */
+  /* Shifted from Stone-800 to Stone-700 to float above the new base */
+  --color-glass-surface: color-mix(in srgb, var(--color-stone-700) 60%, transparent);
+
+  /* Layer 3: The "Paper" (Reading Zone - Optional but recommended) */
+  /* A nearly opaque layer for the transcript text so it doesn't blend with the lighter background */
+  --color-glass-paper: color-mix(in srgb, var(--color-stone-900) 40%, transparent);
+
+  /* Layer 4: Inputs/Wells (Recessed) */
+  /* Increased opacity to 30% so the "hole" is visible against the lighter Stone-800 */
+  --color-glass-input: color-mix(in srgb, black 30%, transparent);
+
+  /* Borders: The "Glint" */
+  /* Increased to 15% because white blends more into Stone-800 than Stone-900 */
+  --color-glass-border: color-mix(in srgb, white 15%, transparent);
+
+  /* Highlight/Hover states */
+  --color-glass-highlight: color-mix(in srgb, white 10%, transparent);
+
+  /* Brand Accent: Scriberr Orange */
+  --color-accent-primary: #FF8C00;
+  --color-accent-hover: #FF9F2D;
+  --color-accent-glow: rgba(255, 140, 0, 0.3);
+
+  /* Typography */
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+
+  /* Text Colors adjusted for the lighter background */
+  --color-text-main: #FAFAF9;
+  /* Stone-50 (Brightest White) */
+  --color-text-muted: #D6D3D1;
+  /* Stone-300 (Lighter Grey for better contrast) */
+}
+
 :root {
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-display);
 }
 
 body {

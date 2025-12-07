@@ -26,7 +26,7 @@ export function DashboardWindow() {
     };
 
     return (
-        <div className="h-screen w-screen bg-stone-800/80 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col text-stone-200 select-none relative font-sans antialiased selection:bg-orange-500/30">
+        <div className="h-screen w-screen bg-glass-base backdrop-blur-xl rounded-2xl border border-glass-border shadow-2xl overflow-hidden flex flex-col text-stone-200 select-none relative font-sans antialiased selection:bg-accent-primary/30">
             <TitleBar />
 
             {/* Content Area */}
@@ -60,7 +60,7 @@ export function DashboardWindow() {
 
             {/* Bottom Navigation Bar */}
             <div className="shrink-0 flex items-center justify-center pb-5 pt-3 z-20">
-                <div className="flex items-center gap-1 bg-stone-800/90 backdrop-blur-xl border border-white/10 rounded-full px-2 py-1.5 shadow-2xl">
+                <div className="flex items-center gap-1 bg-glass-base backdrop-blur-xl border border-glass-border rounded-full px-2 py-1.5 shadow-2xl">
                     <NavButton
                         icon={<Folder size={20} />}
                         isActive={currentView === 'recordings'}
@@ -68,7 +68,7 @@ export function DashboardWindow() {
                         label="Library"
                     />
 
-                    <div className="w-px h-3 bg-white/10 mx-1" />
+                    <div className="w-px h-3 bg-glass-border mx-1" />
 
                     <NavButton
                         icon={<Mic size={20} />}
@@ -78,7 +78,7 @@ export function DashboardWindow() {
                         className="text-white/60 hover:text-red-400 hover:bg-transparent"
                     />
 
-                    <div className="w-px h-3 bg-white/10 mx-1" />
+                    <div className="w-px h-3 bg-glass-border mx-1" />
 
                     <NavButton
                         icon={<Settings size={20} />}
@@ -107,7 +107,7 @@ function NavButton({ icon, isActive, onClick, label, className }: NavButtonProps
             title={label}
             className={clsx(
                 "p-2 rounded-lg transition-all duration-300 relative group",
-                isActive ? "text-amber-400 bg-white/5" : "text-white/40 hover:text-white hover:bg-white/5",
+                isActive ? "text-accent-primary bg-glass-highlight" : "text-white/40 hover:text-white hover:bg-glass-highlight",
                 className
             )}
         >

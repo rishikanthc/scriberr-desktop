@@ -1,23 +1,34 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
 
+interface StartRecordingParams {
+    filename?: string;
+    micDevice?: string;
+    captureSystemAudio?: boolean;
+}
+
 export const useRecordingControls = () => {
+    const queryClient = useQueryClient();
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [recordingDuration, setRecordingDuration] = useState(0);
 
     const startMutation = useMutation({
-        mutationFn: async (args: { pid: number; filename?: string; micDevice?: string }) => {
+        mutationFn: async (args: StartRecordingParams) => {
             await invoke('start_recording_command', {
-                pid: args.pid,
-                filename: args.filename,
-                mic_device: args.micDevice
+                filename: args.filename || null,
+                mic_device: args.micDevice || null,
+                captureSystemAudio: args.captureSystemAudio ?? true // Default to true if not provided
             });
         },
         onSuccess: () => {
             setIsRecording(true);
             setIsPaused(false);
+            queryClient.invalidateQueries({ queryKey: ['isRecording'] });
+        },
+        onError: (error) => {
+            console.error("Start recording failed:", error);
         }
     });
 

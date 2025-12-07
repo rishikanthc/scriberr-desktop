@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { MicSelector } from '../recording/MicSelector';
 import { Controls } from '../recording/Controls';
 import { Timer } from '../recording/Timer';
-import { AppSelector } from '../recording/AppSelector';
 import { useRecordingControls } from '../recording/api/useRecordingControls';
 import { useMicrophones } from '../recording/api/useMicrophones';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Waves, Volume2, VolumeX } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import clsx from 'clsx';
 
 export function RecorderScreen() {
     const {
@@ -26,22 +26,20 @@ export function RecorderScreen() {
     } = useMicrophones();
 
     const [selectedMic, setSelectedMic] = useState<string>('');
-    const [selectedApp, setSelectedApp] = useState<{ pid: number, name: string } | null>(null);
+    const [includeSystemAudio, setIncludeSystemAudio] = useState(true);
 
     // Initial mic selection
     useEffect(() => {
         if (mics.length > 0 && !selectedMic) {
-            setSelectedMic(mics[0].name); // Or from settings/store
+            setSelectedMic(mics[0].name);
         }
     }, [mics, selectedMic]);
 
     const handleStart = () => {
-        if (selectedApp) {
-            startMutation.mutate({
-                pid: selectedApp.pid,
-                micDevice: selectedMic || undefined
-            });
-        }
+        startMutation.mutate({
+            micDevice: selectedMic || undefined,
+            captureSystemAudio: includeSystemAudio
+        });
     };
 
     const handleStop = () => {
@@ -56,60 +54,85 @@ export function RecorderScreen() {
     };
 
     return (
-        <div className="flex flex-col h-full items-center justify-center p-6 gap-8 relative select-none">
+        <div className="flex flex-col h-full items-center justify-between p-8 relative select-none overflow-hidden">
 
-            {/* Background ambient glow when recording */}
-            <AnimatePresence>
-                {isRecording && !isPaused && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 bg-accent-primary/5 radial-gradient pointer-events-none rounded-2xl"
-                    />
-                )}
-            </AnimatePresence>
+            {/* Top Section: System Audio Toggle (Only visible when not recording) */}
+            <div className="w-full h-24 flex justify-center items-end px-4 z-10">
+                <AnimatePresence>
+                    {!isRecording && (
+                        <motion.button
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            onClick={() => setIncludeSystemAudio(!includeSystemAudio)}
+                            className={clsx(
+                                "flex items-center gap-3 px-4 py-2 rounded-full border transition-all duration-300",
+                                includeSystemAudio
+                                    ? "bg-accent-primary/10 border-accent-primary/20 text-accent-primary"
+                                    : "bg-transparent border-transparent text-stone-500 hover:text-stone-300"
+                            )}
+                        >
+                            {includeSystemAudio ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                            <span className="text-sm font-medium tracking-wide">
+                                {includeSystemAudio ? "System Audio Included" : "Microphone Only"}
+                            </span>
+                        </motion.button>
+                    )}
+                </AnimatePresence>
 
-            {/* App Selection State */}
-            {!isRecording ? (
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="w-full max-w-md flex flex-col gap-6 z-10"
-                >
-                    <div className="bg-glass-surface border border-glass-border rounded-2xl p-6 shadow-xl space-y-6">
-                        <AppSelector
-                            onSelect={setSelectedApp}
-                            selectedPid={selectedApp?.pid || null}
-                        />
+                {/* Status Indicator during recording */}
+                <AnimatePresence>
+                    {isRecording && includeSystemAudio && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="bg-accent-primary/10 border border-accent-primary/20 px-3 py-1 rounded-full flex items-center gap-2"
+                        >
+                            <Waves size={12} className="text-accent-primary" />
+                            <span className="text-[10px] font-semibold text-accent-primary tracking-wider uppercase">System Audio</span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
 
-                        <div className="h-px bg-glass-border w-full" />
 
-                        <MicSelector
-                            devices={mics.map(m => ({ deviceId: m.name, label: m.name }))}
-                            selectedDevice={selectedMic}
-                            onSelect={(device) => {
-                                setSelectedMic(device);
-                                switchMicMutation.mutate(device);
-                            }}
-                            isLoading={isLoadingMics}
-                        />
-                    </div>
-                </motion.div>
-            ) : (
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex flex-col items-center gap-4 z-10"
-                >
-                    <div className="text-stone-400 text-sm font-medium tracking-wide">Recording {selectedApp?.name}</div>
-                    <Timer isActive={!isPaused} />
-                </motion.div>
-            )}
+            {/* Middle Section: Timer or Mic Visual */}
+            <div className="flex-1 flex flex-col items-center justify-center z-10 w-full relative">
+                <AnimatePresence mode="wait">
+                    {isRecording ? (
+                        <motion.div
+                            key="timer"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="flex flex-col items-center"
+                        >
+                            <Timer isActive={!isPaused} />
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="mic-hero"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="relative"
+                        >
+                            {/* Placeholder for Mic Visualizer */}
+                            <div className="w-48 h-48 rounded-full bg-glass-surface/30 border border-glass-border flex items-center justify-center">
+                                <div className="w-32 h-32 rounded-full bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-center">
+                                    <div className={clsx("w-3 h-3 rounded-full transition-colors duration-500", includeSystemAudio ? "bg-accent-primary" : "bg-stone-500")} />
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
 
-            {/* Controls */}
-            <div className="z-20 mt-auto pb-8">
+            {/* Bottom Section: Controls & Mic */}
+            <div className="w-full max-w-sm flex flex-col items-center gap-8 z-20 pb-12">
+
+                {/* Main Controls - Centered */}
                 <Controls
                     isRecording={isRecording}
                     isPaused={isPaused}
@@ -117,8 +140,22 @@ export function RecorderScreen() {
                     onStop={handleStop}
                     onPause={() => pauseMutation.mutate()}
                     onResume={() => resumeMutation.mutate()}
-                    disabled={!selectedApp && !isRecording}
+                    disabled={false}
                 />
+
+                {/* Mic Selector - Bottom pinned */}
+                <div className="w-full">
+                    <MicSelector
+                        devices={mics.map(m => ({ deviceId: m.name, label: m.name }))}
+                        selectedDevice={selectedMic}
+                        onSelect={(device) => {
+                            setSelectedMic(device);
+                            switchMicMutation.mutate(device);
+                        }}
+                        isLoading={isLoadingMics}
+                        disabled={isRecording}
+                    />
+                </div>
             </div>
 
             {/* Error Toast */}
@@ -128,7 +165,7 @@ export function RecorderScreen() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20 }}
-                        className="absolute bottom-4 bg-red-500/10 border border-red-500/20 text-red-200 px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 font-medium backdrop-blur-md"
+                        className="absolute bottom-4 right-4 bg-red-500/10 border border-red-500/20 text-red-200 px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 font-medium backdrop-blur-md shadow-lg z-50 pointer-events-none"
                     >
                         <AlertCircle size={14} />
                         <span>Failed to start recording</span>

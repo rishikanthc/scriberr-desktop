@@ -1,29 +1,16 @@
 import { useState } from 'react';
 import { Settings, Mic, Folder, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { RecordingList } from '../library/RecordingList';
 import { SettingsScreen } from '../settings/SettingsScreen';
+import { RecorderScreen } from '../recorder/RecorderScreen';
 import { TitleBar } from '../../components/TitleBar';
 import clsx from 'clsx';
 
-type View = 'recordings' | 'settings';
+type View = 'recordings' | 'settings' | 'recorder';
 
 export function DashboardWindow() {
     const [currentView, setCurrentView] = useState<View>('recordings');
-
-    const toggleRecorder = async () => {
-        const recorder = await WebviewWindow.getByLabel('recorder');
-        if (recorder) {
-            const isVisible = await recorder.isVisible();
-            if (isVisible) {
-                await recorder.hide();
-            } else {
-                await recorder.show();
-                await recorder.setFocus();
-            }
-        }
-    };
 
     return (
         <div className="h-screen w-screen bg-glass-base backdrop-blur-xl rounded-2xl border border-glass-border shadow-2xl overflow-hidden flex flex-col text-stone-200 select-none relative font-sans antialiased selection:bg-accent-primary/30">
@@ -43,7 +30,7 @@ export function DashboardWindow() {
                         >
                             <RecordingList />
                         </motion.div>
-                    ) : (
+                    ) : currentView === 'settings' ? (
                         <motion.div
                             key="settings"
                             initial={{ opacity: 0, x: 20 }}
@@ -53,6 +40,17 @@ export function DashboardWindow() {
                             className="h-full w-full p-6"
                         >
                             <SettingsScreen onBack={() => setCurrentView('recordings')} />
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="recorder"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                            className="h-full w-full"
+                        >
+                            <RecorderScreen />
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -80,10 +78,12 @@ export function DashboardWindow() {
 
                     <NavButton
                         icon={<Mic size={20} />}
-                        isActive={false}
-                        onClick={toggleRecorder}
+                        isActive={currentView === 'recorder'}
+                        onClick={() => setCurrentView('recorder')}
                         label="Recorder"
-                        className="text-white/60 hover:text-red-400 hover:bg-transparent"
+                        className={clsx(
+                            currentView === 'recorder' ? "text-accent-primary" : "text-white/60 hover:text-white"
+                        )}
                     />
 
                     <div className="w-px h-3 bg-glass-border mx-1" />
@@ -114,7 +114,7 @@ function NavButton({ icon, isActive, onClick, label, className }: NavButtonProps
             onClick={onClick}
             title={label}
             className={clsx(
-                "p-2 rounded-lg transition-all duration-300 relative group",
+                "p-2 rounded-lg transition-all duration-300 relative group cursor-pointer",
                 isActive ? "text-accent-primary bg-glass-highlight" : "text-white/40 hover:text-white hover:bg-glass-highlight",
                 className
             )}

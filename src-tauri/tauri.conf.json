@@ -23,18 +23,6 @@
         "resizable": true,
         "alwaysOnTop": false,
         "label": "main"
-      },
-      {
-        "title": "Recorder",
-        "width": 340,
-        "height": 480,
-        "decorations": false,
-        "transparent": true,
-        "visible": false,
-        "resizable": false,
-        "alwaysOnTop": true,
-        "label": "recorder",
-        "url": "/"
       }
     ],
     "trayIcon": {

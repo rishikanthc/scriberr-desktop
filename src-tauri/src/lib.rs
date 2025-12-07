@@ -28,33 +28,23 @@ async fn start_recording_command(filename: Option<String>, mic_device: Option<St
 }
 
 #[tauri::command]
-async fn stop_recording_command(app_handle: AppHandle) -> Result<RecordingResult, AppError> {
+async fn stop_recording_command(app_handle: AppHandle, filename: Option<String>) -> Result<RecordingResult, AppError> {
     let state = app_handle.state::<AppState>();
-    let mut is_recording = state.is_recording.lock().await;
-    let mut recorder = state.recorder.lock().await;
-    
-    println!("Stop command received. Is recording: {}", *is_recording);
-    
-    if *is_recording {
-        // Stop returns Result<f64, String>
-        let duration = recorder.stop_recording().map_err(|e| AppError::Unexpected(e))?;
-        
-        *is_recording = false;
-        println!("Recording stopped successfully. Duration: {:.2}s", duration);
-        
-        let folder = state.output_folder.lock().await.clone();
-        let folder_str = folder.to_string_lossy().to_string();
-        
-        let path_opt = state.current_recording_path.lock().await.clone();
-        let file_str = path_opt.map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
 
-        return Ok(RecordingResult {
-            file_path: file_str,
-            folder_path: folder_str,
-            duration_sec: duration,
-        });
-    }
-    Err(AppError::Logic("Not recording".to_string()))
+    // 1. Stop Recorder & Rename if needed
+    let (duration_sec, final_path) = {
+        let mut recorder = state.recorder.lock().await;
+        recorder.stop_recording(filename).map_err(AppError::Unexpected)?
+    };
+
+    let folder = final_path.parent().unwrap_or(std::path::Path::new("")).to_string_lossy().to_string();
+    let file_path = final_path.to_string_lossy().to_string();
+
+    Ok(RecordingResult {
+        file_path,
+        folder_path: folder,
+        duration_sec,
+    })
 }
 
 #[derive(serde::Serialize)]
@@ -436,6 +426,7 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+
 async fn toggle_recording(app: &AppHandle, filename: Option<String>, mic_device: Option<String>, capture_system_audio: bool) {
     let state = app.state::<AppState>();
     let mut is_recording = state.is_recording.lock().await;
@@ -443,11 +434,10 @@ async fn toggle_recording(app: &AppHandle, filename: Option<String>, mic_device:
     
     if *is_recording {
         // Stop
-        if let Err(e) = recorder.stop_recording() {
-            eprintln!("Failed to stop recording: {}", e);
-        }
+        // The actual stopping logic is now handled by stop_recording_command
+        // This function will only toggle the state, not perform the stop operation directly
         *is_recording = false;
-        println!("Stopped recording");
+        println!("Stopped recording (via toggle)");
     } else {
         // Start
         let folder = state.output_folder.lock().await.clone();

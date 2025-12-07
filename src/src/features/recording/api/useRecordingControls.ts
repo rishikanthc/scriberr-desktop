@@ -54,8 +54,10 @@ export const useRecordingControls = () => {
     });
 
     const stopMutation = useMutation({
-        mutationFn: async () => {
-            return await invoke<{ file_path: string; folder_path: string; duration_sec: number }>('stop_recording_command');
+        mutationFn: async (filename?: string) => {
+            return await invoke<{ file_path: string; folder_path: string; duration_sec: number }>('stop_recording_command', {
+                filename: filename || null
+            });
         },
         onSuccess: (data) => {
             setIsRecording(false);

@@ -40,6 +40,7 @@ pub struct AudioRecorder {
 
     start_time: Arc<Mutex<Option<std::time::Instant>>>,
     start_timestamp: Arc<Mutex<Option<u64>>>, // For UI Sync (Unix Millis)
+    current_path: Arc<Mutex<Option<PathBuf>>>, // Store current recording path for renaming
 }
 
 impl AudioRecorder {
@@ -55,6 +56,7 @@ impl AudioRecorder {
 
             start_time: Arc::new(Mutex::new(None)),
             start_timestamp: Arc::new(Mutex::new(None)),
+            current_path: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -137,7 +139,7 @@ impl AudioRecorder {
     }
 
     pub async fn start_recording(&mut self, output_path: PathBuf, mic_device_name: Option<String>, _capture_system_audio: bool, app_handle: tauri::AppHandle) -> Result<(), String> {
-        self.stop_recording()?; // Ensure stopped
+        let _ = self.stop_recording(None); // Ensure stopped (ignoring result)
         self.paused.store(false, std::sync::atomic::Ordering::Relaxed);
 
         // 1. Setup WAV Writer
@@ -153,6 +155,9 @@ impl AudioRecorder {
         
         let writer_arc = Arc::new(Mutex::new(Some(writer)));
         self.writer = writer_arc.clone();
+        
+        // Store path for later use
+        *self.current_path.lock().unwrap() = Some(output_path.clone());
         
         // precise time tracking for file duration
         *self.start_time.lock().unwrap() = Some(std::time::Instant::now());
@@ -326,10 +331,10 @@ impl AudioRecorder {
         Ok(())
     }
 
-    pub fn stop_recording(&mut self) -> Result<f64, String> {
+    pub fn stop_recording(&mut self, new_filename: Option<String>) -> Result<(f64, PathBuf), String> {
         // Stop Mic
         self.mic_stream = None; 
-
+        
         // Stop System Audio
         if let Some(stream) = &self.stream {
             if let Err(e) = stream.stop_capture() {
@@ -369,7 +374,35 @@ impl AudioRecorder {
         // Clear timestamps
         *self.start_timestamp.lock().unwrap() = None;
 
-        Ok(duration)
+        // Handle Renaming
+        let final_path = if let Some(current) = self.current_path.lock().unwrap().take() {
+            if let Some(name) = new_filename {
+                // Clean input name (basic cleanup)
+                let safe_name = name.trim().replace("/", "_").replace("\\", "_");
+                 if !safe_name.is_empty() {
+                    let mut new_path = current.clone();
+                    new_path.set_file_name(format!("{}.wav", safe_name));
+                    
+                    if let Err(e) = std::fs::rename(&current, &new_path) {
+                        eprintln!("Failed to rename recording: {:?}", e);
+                        // Fallback to original path if rename fails
+                        current
+                    } else {
+                        new_path
+                    }
+                } else {
+                    current
+                }
+            } else {
+                current
+            }
+        } else {
+            // Should verify why current_path is None if we just stopped?
+            // Unlikely if start_recording sets it.
+             return Err("No recording path found internally".to_string());
+        };
+
+        Ok((duration, final_path))
     }
 }
 

@@ -5,9 +5,10 @@ import { Timer } from '../recording/Timer';
 import { useRecordingControls } from '../recording/api/useRecordingControls';
 import { useMicrophones } from '../recording/api/useMicrophones';
 import { useRecordingStatus } from '../recording/api/useRecordingStatus'; // New Hook
-import { AlertCircle, Mic } from 'lucide-react';
+import { Mic, Pencil } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Visualizer } from './Visualizer';
+import { toast } from 'sonner';
 
 export function RecorderScreen() {
     // 1. Fetch Backend Status (Source of Truth)
@@ -30,6 +31,7 @@ export function RecorderScreen() {
 
     const [selectedMic, setSelectedMic] = useState<string>('');
     const [includeSystemAudio] = useState(true);
+    const [filename, setFilename] = useState("");
 
     // Initial mic selection
     useEffect(() => {
@@ -48,17 +50,24 @@ export function RecorderScreen() {
         startMutation.mutate({
             micDevice: selectedMic || undefined,
             captureSystemAudio: includeSystemAudio
+        }, {
+            onError: () => toast.error("Failed to start recording")
         });
     };
 
     const handleStop = () => {
-        stopMutation.mutate(undefined, {
+        stopMutation.mutate(filename || undefined, {
             onSuccess: (data) => {
                 addToLedger.mutate({
                     filePath: data.file_path,
                     durationSec: data.duration_sec
                 });
-            }
+                toast.success("Recording saved", {
+                    description: filename ? `Saved as ${filename}.wav` : "Saved successfully"
+                });
+                setFilename(""); // Reset
+            },
+            onError: () => toast.error("Failed to save recording")
         });
     };
 
@@ -67,8 +76,28 @@ export function RecorderScreen() {
     return (
         <div className="flex flex-col h-full items-center justify-between p-8 relative select-none overflow-hidden">
 
-            {/* Top Section */}
-            <div className="w-full h-8" />
+            {/* Top Section - Filename Input */}
+            <div className="w-full flex justify-center h-16 items-center z-20">
+                <AnimatePresence>
+                    {isRecording && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="relative group"
+                        >
+                            <input
+                                type="text"
+                                placeholder="Recording Name..."
+                                value={filename}
+                                onChange={(e) => setFilename(e.target.value)}
+                                className="bg-glass-input border border-glass-border text-white placeholder:text-white/30 text-center rounded-xl px-4 py-2 w-64 focus:w-80 transition-all duration-300 outline-none backdrop-blur-md focus:border-accent-primary focus:ring-1 focus:ring-accent-primary shadow-lg"
+                            />
+                            <Pencil size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none group-focus-within:text-white/50 transition-colors" />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
 
 
             {/* Center Section: Visualizer OR Start Button */}
@@ -110,10 +139,10 @@ export function RecorderScreen() {
                                 className="group relative w-24 h-24 flex items-center justify-center rounded-full transition-transform duration-300 hover:scale-105 active:scale-95 focus:outline-none outline-none ring-0"
                             >
                                 {/* Outer Ring */}
-                                <div className="absolute inset-0 rounded-full border-2 border-rose-500/30 group-hover:border-rose-500/50 transition-colors" />
+                                <div className="absolute inset-0 rounded-full border-2 border-accent-primary/30 group-hover:border-accent-primary/50 transition-colors" />
 
                                 {/* Inner Circle (The Button) */}
-                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center transition-all duration-300 shadow-[0_0_20px_rgba(244,63,94,0.3)] group-hover:shadow-[0_0_40px_rgba(244,63,94,0.6)]">
+                                <div className="w-20 h-20 rounded-full bg-accent-primary flex items-center justify-center transition-all duration-300 shadow-[0_0_15px_rgba(255,140,0,0.3)] group-hover:shadow-[0_0_25px_rgba(255,140,0,0.5)] hover:bg-accent-hover">
                                     <Mic className="text-white w-8 h-8 opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all" />
                                 </div>
                             </button>
@@ -169,21 +198,6 @@ export function RecorderScreen() {
                     </div>
                 </div>
             </div>
-
-            {/* Error Toast */}
-            <AnimatePresence>
-                {startMutation.isError && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 20 }}
-                        className="absolute bottom-4 right-4 bg-red-500/10 border border-red-500/20 text-red-200 px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 font-medium backdrop-blur-md shadow-lg z-50 pointer-events-none"
-                    >
-                        <AlertCircle size={14} />
-                        <span>Failed to start recording</span>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </div >
     );
 }

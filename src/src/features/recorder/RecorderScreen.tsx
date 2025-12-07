@@ -4,7 +4,7 @@ import { Controls } from '../recording/Controls';
 import { Timer } from '../recording/Timer';
 import { useRecordingControls } from '../recording/api/useRecordingControls';
 import { useMicrophones } from '../recording/api/useMicrophones';
-import { AlertCircle, Waves, Volume2, VolumeX } from 'lucide-react';
+import { AlertCircle, Volume2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 
@@ -26,7 +26,7 @@ export function RecorderScreen() {
     } = useMicrophones();
 
     const [selectedMic, setSelectedMic] = useState<string>('');
-    const [includeSystemAudio, setIncludeSystemAudio] = useState(true);
+    const [includeSystemAudio] = useState(true);
 
     // Initial mic selection
     useEffect(() => {
@@ -56,45 +56,8 @@ export function RecorderScreen() {
     return (
         <div className="flex flex-col h-full items-center justify-between p-8 relative select-none overflow-hidden">
 
-            {/* Top Section: System Audio Toggle (Only visible when not recording) */}
-            <div className="w-full h-24 flex justify-center items-end px-4 z-10">
-                <AnimatePresence>
-                    {!isRecording && (
-                        <motion.button
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            onClick={() => setIncludeSystemAudio(!includeSystemAudio)}
-                            className={clsx(
-                                "flex items-center gap-3 px-4 py-2 rounded-full border transition-all duration-300",
-                                includeSystemAudio
-                                    ? "bg-accent-primary/10 border-accent-primary/20 text-accent-primary"
-                                    : "bg-transparent border-transparent text-stone-500 hover:text-stone-300"
-                            )}
-                        >
-                            {includeSystemAudio ? <Volume2 size={16} /> : <VolumeX size={16} />}
-                            <span className="text-sm font-medium tracking-wide">
-                                {includeSystemAudio ? "System Audio Included" : "Microphone Only"}
-                            </span>
-                        </motion.button>
-                    )}
-                </AnimatePresence>
-
-                {/* Status Indicator during recording */}
-                <AnimatePresence>
-                    {isRecording && includeSystemAudio && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="bg-accent-primary/10 border border-accent-primary/20 px-3 py-1 rounded-full flex items-center gap-2"
-                        >
-                            <Waves size={12} className="text-accent-primary" />
-                            <span className="text-[10px] font-semibold text-accent-primary tracking-wider uppercase">System Audio</span>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
+            {/* Top Section removed as requested */}
+            <div className="w-full h-8" />
 
 
             {/* Middle Section: Timer or Mic Visual */}
@@ -121,7 +84,7 @@ export function RecorderScreen() {
                             {/* Placeholder for Mic Visualizer */}
                             <div className="w-48 h-48 rounded-full bg-glass-surface/30 border border-glass-border flex items-center justify-center">
                                 <div className="w-32 h-32 rounded-full bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-center">
-                                    <div className={clsx("w-3 h-3 rounded-full transition-colors duration-500", includeSystemAudio ? "bg-accent-primary" : "bg-stone-500")} />
+                                    <div className={clsx("w-3 h-3 rounded-full transition-colors duration-500", "bg-accent-primary")} />
                                 </div>
                             </div>
                         </motion.div>
@@ -155,6 +118,12 @@ export function RecorderScreen() {
                         isLoading={isLoadingMics}
                         disabled={isRecording}
                     />
+                </div>
+
+                {/* System Audio Subtitle */}
+                <div className="flex items-center gap-1.5 text-xs text-stone-500/80 font-medium -mt-6">
+                    {/* <Volume2 size={12} className="opacity-70" /> */}
+                    <span>System audio will also be recorded</span>
                 </div>
             </div>
 

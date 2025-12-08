@@ -33,10 +33,12 @@ core-foundation = "0.10.1"
 core-media-sys = "0.1.2"
 cpal = "0.15.2"
 ringbuf = "0.3.3"
-reqwest = { version = "0.12.24", features = ["json", "multipart"] }
+reqwest = { version = "0.12.24", features = ["json", "multipart", "stream"] }
 uuid = { version = "1.19.0", features = ["v4", "serde"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "tls-native-tls"] }
 thiserror = "2.0.17"
 specta = { version = "=2.0.0-rc.20", features = ["serde", "derive"] }
 tauri-specta = { version = "=2.0.0-rc.20", features = ["derive", "javascript", "typescript"] }
 validator = { version = "0.20.0", features = ["derive"] }
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }

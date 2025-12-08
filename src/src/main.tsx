@@ -35,14 +35,15 @@ function Main() {
 
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
+import { ProxyContextProvider } from './features/audio/ProxyContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <>
+      <ProxyContextProvider>
         <Main />
         <Toaster theme="dark" position="bottom-right" richColors />
-      </>
+      </ProxyContextProvider>
     </QueryClientProvider>
   </StrictMode>,
 )

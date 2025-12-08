@@ -13,8 +13,10 @@ use crate::services::storage::{StorageService, Settings};
 use crate::services::audio::AudioRecorder;
 use crate::services::db::{DatabaseService, CachedRecording};
 use crate::services::sync::SyncService;
+use crate::services::proxy::ProxyService;
 use crate::error::AppError;
 use validator::Validate;
+use tokio::sync::RwLock;
 
 struct AppState {
     recorder: Arc<Mutex<AudioRecorder>>,
@@ -23,6 +25,9 @@ struct AppState {
     current_recording_path: Mutex<Option<PathBuf>>,
     db: Arc<DatabaseService>,
     sync: Arc<SyncService>,
+    settings: Arc<RwLock<Settings>>,
+    proxy_port: u16,
+    proxy_shutdown_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
 }
 
 #[tauri::command]
@@ -206,13 +211,14 @@ async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Res
         // Delegate migration logic
         StorageService::migrate_recordings(&old_path_str, &new_path_str)?;
         
-        // TODO: We should also update the SQLite DB paths if they point to the old folder.
-        // Ideally DB service should listen for this or expose a migrate method.
-        // For now, adhering to the "thin controller" manifesto, we moved the file IO out.
-
+        // Update output folder in state
         let state = app_handle.state::<AppState>();
         *state.output_folder.lock().await = PathBuf::from(&new_path_str);
     }
+
+    // Always update global settings state
+    let state = app_handle.state::<AppState>();
+    *state.settings.write().await = settings.clone();
     
     StorageService::save_settings(&settings)?;
     Ok(())
@@ -324,6 +330,12 @@ async fn check_file_exists_command(filename: String, app_handle: AppHandle) -> R
     Ok(path.exists())
 }
 
+#[tauri::command]
+async fn get_proxy_port_command(app_handle: AppHandle) -> Result<u16, AppError> {
+    let state = app_handle.state::<AppState>();
+    Ok(state.proxy_port)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -349,7 +361,8 @@ pub fn run() {
             get_recording_status_command,
             download_recording_command,
             remove_download_command,
-            sync_now_command
+            sync_now_command,
+            get_proxy_port_command
         ])
         .setup(move |app| {
             // builder.mount_events(app); // removed specta mount
@@ -359,10 +372,28 @@ pub fn run() {
             let default_output = documents_dir.join("ScriberrRecordings");
             
             // Try to load settings to get configured output path
-            let output_folder = match StorageService::load_settings(None) {
-                Ok(settings) if !settings.output_path.is_empty() => PathBuf::from(settings.output_path),
-                _ => default_output.clone(),
+            let loaded_settings = StorageService::load_settings(None).unwrap_or(Settings {
+                scriberr_url: "".to_string(),
+                api_key: "".to_string(),
+                output_path: "".to_string(),
+                last_sync_timestamp: None,
+            });
+            
+            let output_folder = if !loaded_settings.output_path.is_empty() {
+                PathBuf::from(&loaded_settings.output_path)
+            } else {
+                default_output.clone()
             };
+            
+            let settings_lock = Arc::new(RwLock::new(loaded_settings));
+
+            // Start Proxy Service
+            let (proxy_shutdown_tx, proxy_shutdown_rx) = tokio::sync::oneshot::channel();
+            let proxy_port = tauri::async_runtime::block_on(async {
+               ProxyService::start(settings_lock.clone(), proxy_shutdown_rx).await
+            }).expect("Failed to start proxy service");
+            
+            println!("Proxy server started on port: {}", proxy_port);
 
             if !output_folder.exists() {
                 let _ = std::fs::create_dir_all(&output_folder);
@@ -402,6 +433,9 @@ pub fn run() {
                 current_recording_path: Mutex::new(None),
                 db: db.clone(),
                 sync: sync_service.clone(),
+                settings: settings_lock,
+                proxy_port,
+                proxy_shutdown_tx: Mutex::new(Some(proxy_shutdown_tx)),
             };
             app.manage(state);
 
@@ -441,8 +475,18 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                 let state = app_handle.state::<AppState>();
+                 // Trigger proxy shutdown
+                 let mut tx_guard = state.proxy_shutdown_tx.blocking_lock();
+                 if let Some(tx) = tx_guard.take() {
+                     let _ = tx.send(());
+                 }
+            }
+        });
 }
 
 

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useRecordings } from '../library/api/useRecordings';
 import { Loader2, AlignLeft, List, FileText, User } from 'lucide-react';
+import { useProxyUrl } from '../audio/useProxyUrl';
 import clsx from 'clsx';
 
 interface TranscriptionViewProps {
@@ -23,6 +24,9 @@ const formatTimestamp = (seconds: number) => {
 export function TranscriptionView({ recordingId }: TranscriptionViewProps) {
     const { data: recordings = [] } = useRecordings();
     const recording = recordings.find(r => r.local_id === recordingId);
+
+    // Audio Proxy URL
+    const audioUrl = useProxyUrl(recording?.remote_job_id || undefined);
 
     // Derived state for safe text and segments
     const { text, segments } = useMemo(() => {
@@ -79,48 +83,61 @@ export function TranscriptionView({ recordingId }: TranscriptionViewProps) {
         <div className="h-full w-full flex flex-col relative animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
             {/* Header: Aligned with Content */}
             <div className="shrink-0 pb-4 pt-6 px-4 z-10 relative">
-                <div className="w-full max-w-3xl mx-auto flex items-end justify-between">
-                    {/* Title Group - Left Aligned */}
-                    <div className="text-left">
-                        <h1 className="text-lg font-bold font-display text-white tracking-tight drop-shadow-sm">
-                            {recording.title || "Untitled Recording"}
-                        </h1>
-                        <div className="flex items-center gap-2 mt-0.5 opacity-40 text-[10px] font-medium text-stone-300 uppercase tracking-widest">
-                            <span>{new Date(recording.created_at).toLocaleDateString()}</span>
-                            {recording.duration_sec > 0 && (
-                                <>
-                                    <span>•</span>
-                                    <span>{formatTimestamp(recording.duration_sec)}</span>
-                                </>
-                            )}
+                <div className="w-full max-w-3xl mx-auto flex flex-col gap-4">
+                    <div className="flex items-end justify-between">
+                        {/* Title Group - Left Aligned */}
+                        <div className="text-left">
+                            <h1 className="text-lg font-bold font-display text-white tracking-tight drop-shadow-sm">
+                                {recording.title || "Untitled Recording"}
+                            </h1>
+                            <div className="flex items-center gap-2 mt-0.5 opacity-40 text-[10px] font-medium text-stone-300 uppercase tracking-widest">
+                                <span>{new Date(recording.created_at).toLocaleDateString()}</span>
+                                {recording.duration_sec > 0 && (
+                                    <>
+                                        <span>•</span>
+                                        <span>{formatTimestamp(recording.duration_sec)}</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Compact Toggle Switch - Right Aligned */}
+                        <div className="flex bg-glass-input rounded-full p-1 border border-white/5 shadow-sm backdrop-blur-md">
+                            <button
+                                onClick={() => setViewMode('paragraph')}
+                                className={clsx(
+                                    "p-1.5 rounded-full transition-all focus:outline-none",
+                                    viewMode === 'paragraph' ? "bg-white/10 text-white shadow-sm" : "text-white/30 hover:text-white/70"
+                                )}
+                                title="Paragraph View"
+                            >
+                                <AlignLeft size={14} />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('segments')}
+                                disabled={segments.length === 0}
+                                className={clsx(
+                                    "p-1.5 rounded-full transition-all focus:outline-none",
+                                    viewMode === 'segments' ? "bg-white/10 text-white shadow-sm" : "text-white/30 hover:text-white/70",
+                                    segments.length === 0 && "opacity-20 cursor-not-allowed"
+                                )}
+                                title="Segmented View"
+                            >
+                                <List size={14} />
+                            </button>
                         </div>
                     </div>
 
-                    {/* Compact Toggle Switch - Right Aligned */}
-                    <div className="flex bg-glass-input rounded-full p-1 border border-white/5 shadow-sm backdrop-blur-md">
-                        <button
-                            onClick={() => setViewMode('paragraph')}
-                            className={clsx(
-                                "p-1.5 rounded-full transition-all focus:outline-none",
-                                viewMode === 'paragraph' ? "bg-white/10 text-white shadow-sm" : "text-white/30 hover:text-white/70"
-                            )}
-                            title="Paragraph View"
-                        >
-                            <AlignLeft size={14} />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('segments')}
-                            disabled={segments.length === 0}
-                            className={clsx(
-                                "p-1.5 rounded-full transition-all focus:outline-none",
-                                viewMode === 'segments' ? "bg-white/10 text-white shadow-sm" : "text-white/30 hover:text-white/70",
-                                segments.length === 0 && "opacity-20 cursor-not-allowed"
-                            )}
-                            title="Segmented View"
-                        >
-                            <List size={14} />
-                        </button>
-                    </div>
+                    {/* Audio Player */}
+                    {audioUrl && (
+                        <div className="w-full pt-1">
+                            <audio
+                                controls
+                                src={audioUrl}
+                                className="w-full h-8 block outline-none"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 

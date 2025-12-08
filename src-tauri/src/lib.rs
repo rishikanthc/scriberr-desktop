@@ -444,7 +444,7 @@ pub fn run() {
 
             #[cfg(target_os = "macos")]
             {
-                if let Err(e) = apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(26.0)) {
+                if let Err(e) = apply_liquid_glass(&window, NSGlassEffectViewStyle::Regular, None, Some(26.0)) {
                     eprintln!("Failed to apply liquid glass effect: {:?}", e);
                 }
             }

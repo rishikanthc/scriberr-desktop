@@ -125,9 +125,9 @@ export function TranscriptionView({ recordingId }: TranscriptionViewProps) {
             </div>
 
             {/* Content Area - Fixed viewport container */}
-            <div className="flex-1 min-h-0 w-full flex justify-center pb-4 px-4">
+            <div className="flex-1 min-h-0 w-full flex justify-center pb-3 px-4">
                 {/* The "Paper" - Fixed max-width, Flex Height */}
-                <div className="w-full max-w-3xl bg-glass-paper border border-glass-border/30 rounded-lg shadow-xl backdrop-blur-xl flex flex-col relative overflow-hidden h-full">
+                <div className="w-full max-w-3xl bg-glass-paper border border-glass-border/30 rounded-lg shadow-lg backdrop-blur-xl flex flex-col relative overflow-hidden h-full">
 
                     {/* Inner Scroll Container */}
                     <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar scroll-smooth select-text">

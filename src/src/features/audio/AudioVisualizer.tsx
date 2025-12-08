@@ -24,7 +24,7 @@ export function AudioVisualizer({ audioRef, isPlaying }: AudioVisualizerProps) {
             contextRef.current = ctx;
 
             const analyzer = ctx.createAnalyser();
-            analyzer.fftSize = 128; // ~64 bars
+            analyzer.fftSize = 256; // 128 bins. Better resolution for bass/voice.
             analyzer.smoothingTimeConstant = 0.8;
             analyzerRef.current = analyzer;
 
@@ -72,20 +72,30 @@ export function AudioVisualizer({ audioRef, isPlaying }: AudioVisualizerProps) {
             ctx.clearRect(0, 0, width, height);
 
             // Render Config
-            const barCount = dataArray.length; // 64
-            const barWidth = (width / barCount) * 0.8; // 80% width, 20% gap
+            const barCount = 32; // Fixed number of bars for cleaner look
+            const barWidth = (width / barCount) * 0.8;
             const barGap = (width / barCount) * 0.2;
 
+            // Focus on 0-8kHz range (Human voice/Music)
+            // 44.1kHz / 2 = 22kHz nyquist. 128 bins. 
+            // 8kHz is roughly top 37% of bins. ~47 bins.
+            // We'll map the first 50 bins to our 32 bars.
+            const usableBins = 50;
+
             for (let i = 0; i < barCount; i++) {
-                const value = dataArray[i];
+                // Linear interpolation to map bar index to frequency bin
+                const binIndex = Math.floor(i * (usableBins / barCount));
+                const value = dataArray[binIndex];
+
                 const x = i * (barWidth + barGap);
 
                 // Calculate how many tiles active
-                // value is 0-255. 
-                // Height available: height. 
-                // Max tiles: height / totalBlockSize
+                // Boost the signal slightly as high freqs drop off
+                const boost = 1 + (i / barCount) * 0.5;
+                const normalizedValue = Math.min(255, value * boost);
+
                 const maxTiles = Math.floor(height / totalBlockSize);
-                const activeTiles = Math.floor((value / 255) * maxTiles);
+                const activeTiles = Math.floor((normalizedValue / 255) * maxTiles);
 
                 for (let j = 0; j < maxTiles; j++) {
                     const y = height - (j * totalBlockSize) - tileHeight;

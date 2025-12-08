@@ -14,6 +14,10 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
 
+    const [hoverTime, setHoverTime] = useState(0);
+    const [isHovering, setIsHovering] = useState(false);
+    const progressRef = useRef<HTMLDivElement>(null);
+
     const togglePlay = () => {
         if (!audioRef.current) return;
         if (isPlaying) {
@@ -41,6 +45,14 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
             audioRef.current.currentTime = time;
             setCurrentTime(time);
         }
+    };
+
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!progressRef.current || !duration) return;
+        const rect = progressRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const percent = Math.min(Math.max(0, x / rect.width), 1);
+        setHoverTime(percent * duration);
     };
 
     const formatTime = (time: number) => {
@@ -99,7 +111,27 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
                 </div>
 
                 {/* Bottom Row: Scrubber */}
-                <div className="relative w-full h-4 flex items-center group">
+                <div
+                    ref={progressRef}
+                    className="relative w-full h-4 flex items-center group cursor-pointer"
+                    onMouseMove={handleMouseMove}
+                    onMouseEnter={() => setIsHovering(true)}
+                    onMouseLeave={() => setIsHovering(false)}
+                >
+                    {/* Tooltip */}
+                    <div
+                        className={clsx(
+                            "absolute bottom-full mb-2 px-2 py-1 rounded bg-stone-900/90 text-[10px] font-mono text-white shadow-lg border border-white/10 pointer-events-none transition-opacity duration-200 backdrop-blur-sm z-30",
+                            isHovering ? "opacity-100" : "opacity-0"
+                        )}
+                        style={{
+                            left: `${duration > 0 ? (hoverTime / duration) * 100 : 0}%`,
+                            transform: 'translateX(-50%)'
+                        }}
+                    >
+                        {formatTime(hoverTime)}
+                    </div>
+
                     {/* Track Background */}
                     <div className="absolute w-full h-[2px] bg-white/10 rounded-full overflow-hidden">
                         {/* Progress Fill */}

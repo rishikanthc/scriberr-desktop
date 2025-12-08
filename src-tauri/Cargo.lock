@@ -4326,6 +4326,7 @@ dependencies = [
  "tower-http 0.5.2",
  "uuid",
  "validator",
+ "window-vibrancy 0.7.1",
 ]
 
 [[package]]
@@ -5215,7 +5216,7 @@ dependencies = [
  "url",
  "webkit2gtk",
  "webview2-com",
- "window-vibrancy",
+ "window-vibrancy 0.6.0",
  "windows 0.61.3",
 ]
 
@@ -6447,6 +6448,20 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "raw-window-handle",
  "windows-sys 0.59.0",
+ "windows-version",
+]
+
+[[package]]
+name = "window-vibrancy"
+version = "0.7.1"
+source = "git+https://github.com/tauri-apps/window-vibrancy?branch=dev#5e7ddd770fc81fcfae11e6e32f939f4965761bdb"
+dependencies = [
+ "objc2 0.6.3",
+ "objc2-app-kit",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
+ "raw-window-handle",
+ "windows-sys 0.60.2",
  "windows-version",
 ]
 

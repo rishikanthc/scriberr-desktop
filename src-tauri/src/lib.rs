@@ -9,6 +9,7 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager, AppHandle, Emitter,
 };
+use window_vibrancy::*;
 use crate::services::storage::{StorageService, Settings};
 use crate::services::audio::AudioRecorder;
 use crate::services::db::{DatabaseService, CachedRecording};
@@ -438,6 +439,20 @@ pub fn run() {
                 proxy_shutdown_tx: Mutex::new(Some(proxy_shutdown_tx)),
             };
             app.manage(state);
+
+            let window = app.get_webview_window("main").unwrap();
+
+            #[cfg(target_os = "macos")]
+            {
+                if let Err(e) = apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(26.0)) {
+                    eprintln!("Failed to apply liquid glass effect: {:?}", e);
+                }
+            }
+
+            #[cfg(target_os = "windows")]
+            apply_blur(&window, Some((0, 0, 0, 0)))
+                .expect("Unsupported platform! 'apply_blur' is only supported on Windows");
+
 
             let _tray = TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())

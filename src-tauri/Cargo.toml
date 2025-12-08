@@ -42,3 +42,4 @@ tauri-specta = { version = "=2.0.0-rc.20", features = ["derive", "javascript", "
 validator = { version = "0.20.0", features = ["derive"] }
 axum = "0.7"
 tower-http = { version = "0.5", features = ["cors"] }
+window-vibrancy = { git = "https://github.com/tauri-apps/window-vibrancy", branch = "dev" }

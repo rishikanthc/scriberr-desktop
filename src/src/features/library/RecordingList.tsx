@@ -249,39 +249,35 @@ export function RecordingList() {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1">
+                                        {/* Status Icons */}
                                         {(isUploading || rec.sync_status === 'UPLOADING') && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#FF8C00]/10 border border-[#FF8C00]/20 text-[#FF8C00] text-[10px] font-medium animate-pulse">
-                                                <CloudUpload size={10} />
-                                                <span>Uploading...</span>
+                                            <div className="p-1.5 rounded-md text-[#FF8C00] animate-pulse" title="Uploading...">
+                                                <CloudUpload size={14} />
                                             </div>
                                         )}
 
                                         {rec.sync_status === 'PROCESSING_REMOTE' && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[10px] font-medium animate-pulse">
-                                                <Loader2 size={10} className="animate-spin" />
-                                                <span>Processing</span>
+                                            <div className="p-1.5 rounded-md text-amber-200 animate-pulse" title="Processing remotely...">
+                                                <Loader2 size={14} className="animate-spin" />
                                             </div>
                                         )}
 
                                         {rec.sync_status === 'COMPLETED_SYNCED' && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/10 border border-green-500/20 text-green-200 text-[10px] font-medium">
-                                                <CheckCircle size={10} />
-                                                <span>Synced</span>
+                                            <div className="p-1.5 rounded-md text-green-400" title="Synced">
+                                                <CheckCircle size={14} />
                                             </div>
                                         )}
 
                                         {rec.sync_status === 'FAILED' && !isUploading && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-500/10 border border-red-500/20 text-red-200 text-[10px] font-medium">
-                                                <AlertCircle size={10} />
-                                                <span>Failed</span>
+                                            <div className="p-1.5 rounded-md text-red-400" title="Sync Failed">
+                                                <AlertCircle size={14} />
                                             </div>
                                         )}
 
                                         {rec.sync_status === 'DRAFT_READY' && !isUploading && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/40 text-[10px] font-medium">
-                                                <CloudOff size={10} />
-                                                <span>Not Uploaded</span>
+                                            <div className="p-1.5 rounded-md text-white/20" title="Not Uploaded (Local Only)">
+                                                <CloudOff size={14} />
                                             </div>
                                         )}
 
@@ -297,7 +293,8 @@ export function RecordingList() {
                                             {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                                         </button>
 
-                                        {rec.sync_status !== 'COMPLETED_SYNCED' && rec.sync_status !== 'PROCESSING_REMOTE' && !isUploading && (
+                                        {/* Upload Button - ONLY for DRAFT_READY */}
+                                        {rec.sync_status === 'DRAFT_READY' && !isUploading && (
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();

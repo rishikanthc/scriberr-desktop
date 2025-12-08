@@ -24,6 +24,10 @@ impl From<String> for SyncStatus {
             "PROCESSING_REMOTE" => SyncStatus::ProcessingRemote,
             "COMPLETED_SYNCED" => SyncStatus::CompletedSynced,
             "FAILED" => SyncStatus::Failed,
+            // Swagger / Remote statuses
+            "uploaded" | "pending" | "processing" => SyncStatus::ProcessingRemote,
+            "completed" => SyncStatus::CompletedSynced,
+            "failed" => SyncStatus::Failed,
             _ => SyncStatus::DraftReady, // Default fallback
         }
     }

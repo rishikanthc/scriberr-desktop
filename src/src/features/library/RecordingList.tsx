@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { FileAudio, Trash2, CloudUpload, CheckCircle, Clock, Calendar, AlertCircle, Loader2 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
+import { FileAudio, Trash2, CloudUpload, CheckCircle, Clock, Calendar, AlertCircle, Loader2, RefreshCw, CloudOff } from 'lucide-react';
 import { useRecordings, useDeleteRecording, useUploadRecording } from './api/useRecordings';
 import { useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { LedgerEntry } from '../../types';
 
-// Inline formatDuration if not exists
 // Inline formatDuration if not exists
 const formatDuration = (seconds?: number) => {
     if (!seconds) return '00:00';
@@ -20,7 +20,6 @@ const getFilename = (path: string | null, title: string) => {
     return title;
 };
 
-
 export function RecordingList() {
     const { data: recordings = [], isLoading, refetch } = useRecordings();
     const deleteMutation = useDeleteRecording();
@@ -29,6 +28,7 @@ export function RecordingList() {
     const [uploadingId, setUploadingId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string } | null>(null);
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
     const queryClient = useQueryClient();
 
     // Virtualizer setup
@@ -56,11 +56,24 @@ export function RecordingList() {
             });
         });
 
+        const unlistenDeletedPromise = listen<string>('recording-deleted-remote', (event) => {
+            queryClient.setQueryData<LedgerEntry[]>(['recordings'], (old) => {
+                if (!old) return old;
+                return old.filter(rec => rec.remote_job_id !== event.payload);
+            });
+        });
+
+        const unlistenSyncPromise = listen<void>('sync-completed', () => {
+            refetch();
+        });
+
         return () => {
             unlistenPromise.then(unlisten => unlisten());
             unlistenUpdatedPromise.then(unlisten => unlisten());
+            unlistenDeletedPromise.then(unlisten => unlisten());
+            unlistenSyncPromise.then(unlisten => unlisten());
         };
-    }, [queryClient]);
+    }, [queryClient, refetch]);
 
     // Close context menu on global click
     useEffect(() => {
@@ -93,7 +106,6 @@ export function RecordingList() {
 
     const confirmDelete = async () => {
         if (deleteId) {
-            // Find path
             const rec = recordings.find(r => r.local_id === deleteId);
             if (!rec) {
                 setDeleteId(null);
@@ -107,11 +119,11 @@ export function RecordingList() {
         }
     };
 
-    const handleUpload = async (id: string) => { // Removed event
+    const handleUpload = async (id: string) => {
         if (uploadingId) return;
 
         setUploadingId(id);
-        uploadMutation.mutate(id, { // API expects ID for upload
+        uploadMutation.mutate(id, {
             onSuccess: () => {
                 setUploadingId(null);
             },
@@ -120,6 +132,19 @@ export function RecordingList() {
                 refetch();
             }
         });
+    };
+
+    const handleSync = async () => {
+        setIsSyncing(true);
+        try {
+            await invoke('sync_now_command');
+            // Optimistic update or wait for event?
+            // sync-completed event calls refetch.
+        } catch (error) {
+            console.error("Sync failed:", error);
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     if (isLoading) {
@@ -133,6 +158,16 @@ export function RecordingList() {
     if (recordings.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center p-8 text-white/40 gap-3">
+                <div className="flex gap-2 mb-4">
+                    <button
+                        onClick={handleSync}
+                        disabled={isSyncing}
+                        className="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                        <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+                        <span>Sync Now</span>
+                    </button>
+                </div>
                 <FileAudio size={32} className="opacity-50" />
                 <p>No recordings found</p>
             </div>
@@ -143,12 +178,23 @@ export function RecordingList() {
         <div className="flex flex-col h-full overflow-hidden relative">
             <div className="flex items-center justify-between px-2 mb-2 shrink-0">
                 <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Recordings</span>
-                <button
-                    onClick={() => refetch()}
-                    className="text-white/40 hover:text-white transition-colors"
-                >
-                    <Clock size={12} />
-                </button>
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={handleSync}
+                        disabled={isSyncing}
+                        className="text-white/40 hover:text-white transition-colors p-1"
+                        title="Sync with Cloud"
+                    >
+                        <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+                    </button>
+                    <button
+                        onClick={() => refetch()}
+                        className="text-white/40 hover:text-white transition-colors p-1"
+                        title="Reload List"
+                    >
+                        <Clock size={12} />
+                    </button>
+                </div>
             </div>
 
             <div
@@ -178,11 +224,10 @@ export function RecordingList() {
                                     height: `${virtualRow.size}px`,
                                     transform: `translateY(${virtualRow.start}px)`,
                                 }}
-                                className="pb-2" // Add gap simulation
+                                className="pb-2"
                             >
                                 <div
                                     onContextMenu={(e) => handleContextMenu(e, rec.local_id)}
-                                    // onClick={() => onSelect?.(rec)}
                                     className="group flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all cursor-pointer select-none relative h-full"
                                 >
                                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/20 to-blue-500/20 flex items-center justify-center border border-white/10 shrink-0">
@@ -205,10 +250,17 @@ export function RecordingList() {
                                     </div>
 
                                     <div className="flex items-center gap-2">
-                                        {(isUploading || rec.sync_status === 'UPLOADING' || rec.sync_status === 'PROCESSING_REMOTE') && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-200 text-[10px] font-medium animate-pulse">
+                                        {(isUploading || rec.sync_status === 'UPLOADING') && (
+                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#FF8C00]/10 border border-[#FF8C00]/20 text-[#FF8C00] text-[10px] font-medium animate-pulse">
                                                 <CloudUpload size={10} />
-                                                <span>{rec.sync_status === 'PROCESSING_REMOTE' ? 'Processing' : 'Syncing...'}</span>
+                                                <span>Uploading...</span>
+                                            </div>
+                                        )}
+
+                                        {rec.sync_status === 'PROCESSING_REMOTE' && (
+                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[10px] font-medium animate-pulse">
+                                                <Loader2 size={10} className="animate-spin" />
+                                                <span>Processing</span>
                                             </div>
                                         )}
 
@@ -226,9 +278,11 @@ export function RecordingList() {
                                             </div>
                                         )}
 
-                                        {/* Status: Pending or just empty if incomplete */}
-                                        {rec.sync_status !== 'COMPLETED_SYNCED' && rec.sync_status !== 'FAILED' && !isUploading && rec.sync_status !== 'UPLOADING' && rec.sync_status !== 'PROCESSING_REMOTE' && (
-                                            <div className="px-2"></div>
+                                        {rec.sync_status === 'DRAFT_READY' && !isUploading && (
+                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/40 text-[10px] font-medium">
+                                                <CloudOff size={10} />
+                                                <span>Not Uploaded</span>
+                                            </div>
                                         )}
 
                                         <button

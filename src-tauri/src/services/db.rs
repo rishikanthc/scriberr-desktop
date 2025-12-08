@@ -241,4 +241,94 @@ impl DatabaseService {
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
+
+    pub async fn upsert_remote_recording(
+        &self,
+        remote_id: &str,
+        title: &str,
+        status_str: &str,
+        created_at: &str,
+        transcript: Option<&str>,
+        summary: Option<&str>,
+        individual_json: Option<&str>,
+        remote_audio_url: Option<&str>
+    ) -> Result<CachedRecording, AppError> {
+        // Check if exists
+        let existing = sqlx::query!(
+            "SELECT local_id FROM cached_recordings WHERE remote_job_id = ?",
+            remote_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let sync_status = SyncStatus::from(status_str.to_string()).to_string();
+
+        if let Some(record) = existing {
+            // Update
+            sqlx::query!(
+                r#"
+                UPDATE cached_recordings 
+                SET title = ?, 
+                    sync_status = ?, 
+                    transcript_text = ?, 
+                    summary_text = ?, 
+                    individual_transcripts_json = ?,
+                    remote_audio_url = ?
+                WHERE local_id = ?
+                "#,
+                title,
+                sync_status,
+                transcript,
+                summary,
+                individual_json,
+                remote_audio_url,
+                record.local_id
+            )
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+            self.get_recording(&record.local_id).await
+        } else {
+            // Insert
+            let local_id = Uuid::new_v4().to_string();
+            // Typically use remote created_at, but we handle it as string
+            
+            sqlx::query!(
+                r#"
+                INSERT INTO cached_recordings (
+                    local_id, remote_job_id, title, duration_sec, created_at, 
+                    sync_status, transcript_text, summary_text, 
+                    individual_transcripts_json, remote_audio_url, keep_offline
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+                local_id,
+                remote_id,
+                title,
+                0.0, // Duration unknown from list? Or passed?
+                created_at,
+                sync_status,
+                transcript,
+                summary,
+                individual_json,
+                remote_audio_url,
+                false
+            )
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+            self.get_recording(&local_id).await
+        }
+    }
+
+    pub async fn delete_remote_recording(&self, remote_id: &str) -> Result<(), AppError> {
+        sqlx::query!("DELETE FROM cached_recordings WHERE remote_job_id = ?", remote_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(())
+    }
 }

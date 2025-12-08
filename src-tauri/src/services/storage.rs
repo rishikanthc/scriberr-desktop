@@ -11,6 +11,7 @@ pub struct Settings {
     #[validate(length(min = 1, message = "API Key is required"))]
     pub api_key: String,
     pub output_path: String,
+    pub last_sync_timestamp: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Type)]
@@ -88,6 +89,7 @@ impl StorageService {
                 scriberr_url: "".to_string(),
                 api_key: "".to_string(),
                 output_path: default_output,
+                last_sync_timestamp: None,
             });
         }
         

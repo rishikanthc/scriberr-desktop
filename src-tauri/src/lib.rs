@@ -184,6 +184,7 @@ async fn save_settings_command(settings: Settings, app_handle: AppHandle) -> Res
         scriberr_url: "".to_string(),
         api_key: "".to_string(),
         output_path: "".to_string(),
+        last_sync_timestamp: None,
     });
 
     let default_dir = app_handle.path().document_dir().unwrap_or(PathBuf::from("/"));
@@ -303,6 +304,13 @@ async fn remove_download_command(local_id: String, app_handle: AppHandle) -> Res
 }
 
 #[tauri::command]
+async fn sync_now_command(app_handle: AppHandle) -> Result<(), AppError> {
+    let state = app_handle.state::<AppState>();
+    state.sync.perform_delta_sync().await?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn check_file_exists_command(filename: String, app_handle: AppHandle) -> Result<bool, AppError> {
     let state = app_handle.state::<AppState>();
     let folder = state.output_folder.lock().await.clone();
@@ -340,7 +348,8 @@ pub fn run() {
             check_file_exists_command,
             get_recording_status_command,
             download_recording_command,
-            remove_download_command
+            remove_download_command,
+            sync_now_command
         ])
         .setup(move |app| {
             // builder.mount_events(app); // removed specta mount

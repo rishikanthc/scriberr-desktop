@@ -27,4 +27,5 @@ export interface Settings {
     scriberr_url: string;
     api_key: string;
     output_path: string;
+    last_sync_timestamp?: string | null;
 }

@@ -137,11 +137,6 @@ export function AudioVisualizer({ audioRef, isPlaying, isHovering = false, hover
 
             const maxTilesColumn = Math.floor(dimensions.height / TOTAL_ROW_HEIGHT);
 
-            // Hover Logic
-            const hoverColumnIndex = isHovering
-                ? Math.floor(hoverPercent * barCount)
-                : -1;
-
             for (let i = 0; i < barCount; i++) {
                 // Map visualization bars to frequency bins (focus on 0-70% of freq range)
                 const binIndex = Math.floor(i * (dataArray.length / barCount) * 0.7);
@@ -171,17 +166,6 @@ export function AudioVisualizer({ audioRef, isPlaying, isHovering = false, hover
                 // Draw Column
                 for (let j = 0; j < maxTilesColumn; j++) {
                     const y = dimensions.height - (j * TOTAL_ROW_HEIGHT) - TILE_SIZE;
-
-                    // 1. Ghost Grid (Warm Flashlight)
-                    if (i === hoverColumnIndex && isHovering) {
-                        if (j >= activeTiles && j !== peakTile) {
-                            // Use a faint orange instead of white for the ghost
-                            ctx.fillStyle = "rgba(255, 140, 0, 0.15)";
-                            ctx.beginPath();
-                            ctx.roundRect(x, y, TILE_SIZE, TILE_SIZE, 1 * SCALE);
-                            ctx.fill();
-                        }
-                    }
 
                     // 2. Active Signal
                     if (j < activeTiles) {

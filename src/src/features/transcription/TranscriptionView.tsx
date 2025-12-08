@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useRecordings } from '../library/api/useRecordings';
 import { Loader2, AlignLeft, List, FileText, User } from 'lucide-react';
 import { useProxyUrl } from '../audio/useProxyUrl';
+import { EmberPlayer } from '../audio/EmberPlayer';
 import clsx from 'clsx';
 
 interface TranscriptionViewProps {
@@ -128,14 +129,10 @@ export function TranscriptionView({ recordingId }: TranscriptionViewProps) {
                         </div>
                     </div>
 
-                    {/* Audio Player */}
+                    {/* Audio Player - Ember Equalizer */}
                     {audioUrl && (
-                        <div className="w-full pt-1">
-                            <audio
-                                controls
-                                src={audioUrl}
-                                className="w-full h-8 block outline-none"
-                            />
+                        <div className="w-full pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <EmberPlayer src={audioUrl} />
                         </div>
                     )}
                 </div>

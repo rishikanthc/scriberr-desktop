@@ -115,7 +115,6 @@ async fn proxy_handler(
     let mut response_builder = Response::builder().status(status);
 
     // Forward Headers
-    // Content-Type, Content-Length, Content-Range, Accept-Ranges
     if let Some(h) = upstream_resp.headers().get("content-type") {
         response_builder = response_builder.header("content-type", h);
     }
@@ -128,6 +127,9 @@ async fn proxy_handler(
     if let Some(h) = upstream_resp.headers().get("accept-ranges") {
         response_builder = response_builder.header("accept-ranges", h);
     }
+
+    // CORS for Web Audio API
+    response_builder = response_builder.header("access-control-allow-origin", "*");
     
     // 7. Stream Body
     let body = Body::from_stream(upstream_resp.bytes_stream());

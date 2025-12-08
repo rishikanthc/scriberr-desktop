@@ -6,7 +6,7 @@
 
   /* Layer 1: App Shell (User Adjusted) */
   /* Now Lighter: Stone-800 gives a warm, deep grey/brown canvas */
-  --color-glass-base: color-mix(in srgb, var(--color-stone-700) 80%, transparent);
+  --color-glass-base: color-mix(in srgb, var(--color-stone-800) 80%, transparent);
 
   /* Layer 2: Panels/Cards (Must be lighter than Layer 1) */
   /* Shifted from Stone-800 to Stone-700 to float above the new base */
@@ -14,7 +14,7 @@
 
   /* Layer 3: The "Paper" (Reading Zone) */
   /* Slightly more substantial backing for better readability */
-  --color-glass-paper: color-mix(in srgb, var(--color-stone-900) 60%, transparent);
+  --color-glass-paper: color-mix(in srgb, var(--color-stone-900) 40%, transparent);
 
   /* Layer 4: Inputs/Wells (Recessed) */
   /* Increased opacity to 30% so the "hole" is visible against the lighter Stone-800 */
@@ -22,7 +22,7 @@
 
   /* Borders: The "Glint" */
   /* Increased to 15% because white blends more into Stone-800 than Stone-900 */
-  --color-glass-border: color-mix(in srgb, white 10%, transparent);
+  --color-glass-border: color-mix(in srgb, white 15%, transparent);
 
   /* Highlight/Hover states */
   --color-glass-highlight: color-mix(in srgb, white 10%, transparent);

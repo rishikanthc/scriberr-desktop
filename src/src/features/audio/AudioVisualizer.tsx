@@ -1,157 +1,229 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface AudioVisualizerProps {
     audioRef: React.RefObject<HTMLAudioElement | null>;
     isPlaying: boolean;
+    isHovering?: boolean;
+    hoverPercent?: number;
 }
 
-export function AudioVisualizer({ audioRef, isPlaying }: AudioVisualizerProps) {
+// Global cache to prevent "HTMLMediaElement already connected" errors
+const audioSourceMap = new WeakMap<HTMLAudioElement, MediaElementAudioSourceNode>();
+
+export function AudioVisualizer({ audioRef, isPlaying, isHovering = false, hoverPercent = 0 }: AudioVisualizerProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const contextRef = useRef<AudioContext | null>(null);
-    const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
     const analyzerRef = useRef<AnalyserNode | null>(null);
     const rafRef = useRef<number | null>(null);
 
+    // Physics State
+    const peakPositionsRef = useRef<number[]>([]);
+    const peakDropsRef = useRef<number[]>([]);
+
+    // Resize State for Sharpness
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    // 1. Handle Resize
+    useEffect(() => {
+        const updateSize = () => {
+            if (containerRef.current) {
+                const { clientWidth, clientHeight } = containerRef.current;
+                setDimensions({
+                    width: clientWidth * window.devicePixelRatio,
+                    height: clientHeight * window.devicePixelRatio
+                });
+            }
+        };
+
+        updateSize();
+        const observer = new ResizeObserver(updateSize);
+        if (containerRef.current) observer.observe(containerRef.current);
+
+        return () => observer.disconnect();
+    }, []);
+
+    // 2. Audio Graph Initialization
     useEffect(() => {
         if (!audioRef.current) return;
 
-        // Initialize Audio Context (once)
         const initAudio = () => {
-            if (contextRef.current) return;
+            if (!contextRef.current) {
+                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                contextRef.current = new AudioContextClass();
+            }
+            const ctx = contextRef.current;
 
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-            const ctx = new AudioContextClass();
-            contextRef.current = ctx;
+            if (!analyzerRef.current) {
+                const analyzer = ctx.createAnalyser();
+                // Increased FFT size to 256 (128 bins) to support higher density bars
+                analyzer.fftSize = 256;
+                analyzer.smoothingTimeConstant = 0.85;
+                analyzerRef.current = analyzer;
+            }
 
-            const analyzer = ctx.createAnalyser();
-            analyzer.fftSize = 256; // 128 bins. Better resolution for bass/voice.
-            analyzer.smoothingTimeConstant = 0.8;
-            analyzerRef.current = analyzer;
+            const audioEl = audioRef.current!;
 
-            try {
-                const source = ctx.createMediaElementSource(audioRef.current!);
-                source.connect(analyzer);
-                analyzer.connect(ctx.destination);
-                sourceRef.current = source;
-            } catch (e) {
-                console.error("Audio Graph Error:", e);
+            if (audioSourceMap.has(audioEl)) {
+                try {
+                    const source = audioSourceMap.get(audioEl)!;
+                    source.connect(analyzerRef.current!);
+                    analyzerRef.current!.connect(ctx.destination);
+                } catch (e) { /* ignore */ }
+            } else {
+                try {
+                    const source = ctx.createMediaElementSource(audioEl);
+                    source.connect(analyzerRef.current!);
+                    analyzerRef.current!.connect(ctx.destination);
+                    audioSourceMap.set(audioEl, source);
+                } catch (e) {
+                    console.error("Audio Graph Error:", e);
+                }
             }
         };
 
-        // Initialize on first interaction or mount if already capable
-        // Browsers require user gesture for AudioContext usually, but since we are triggering play via UI, it might be fine.
-        // We'll lazy init if needed, but for now init on mount/update.
         initAudio();
 
-        return () => {
-            // Cleanup tricky with AudioContext, usually kept alive or suspended.
-            // keeping context alive is fine for SPA.
-        };
-    }, [audioRef]);
+        if (isPlaying && contextRef.current?.state === 'suspended') {
+            contextRef.current.resume();
+        }
 
+    }, [audioRef, isPlaying]);
+
+    // 3. The Drawing Loop
     useEffect(() => {
-        if (!canvasRef.current || !analyzerRef.current) return;
+        if (!canvasRef.current || !analyzerRef.current || dimensions.width === 0) return;
 
         const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: true });
         if (!ctx) return;
 
-        // Visualizer Config
+        // --- VISUAL CONFIGURATION ---
+        const SCALE = window.devicePixelRatio;
+        const TILE_SIZE = 6 * SCALE;  // Increased from 4 -> 6
+        const COL_GAP = 1 * SCALE;    // Tight adjacency (1px gap)
+        const ROW_GAP = 2 * SCALE;    // Vertical stack gap
+        const TOTAL_ROW_HEIGHT = TILE_SIZE + ROW_GAP;
+        const COL_WIDTH = TILE_SIZE + COL_GAP;
+
+        // Create Gradient (Warm Flame)
+        const gradient = ctx.createLinearGradient(0, 0, 0, dimensions.height);
+        // Top: Luminous Amber (Not white, but bright yellow-gold)
+        gradient.addColorStop(0, '#FCD34D'); // Amber-300
+        // Mid: Brand Accent
+        gradient.addColorStop(0.4, '#FF8C00'); // Orange-500
+        // Bottom: Deep Heat
+        gradient.addColorStop(1, '#C2410C'); // Orange-700
+
         const dataArray = new Uint8Array(analyzerRef.current.frequencyBinCount);
-        const tileHeight = 4;
-        const gap = 2;
-        const totalBlockSize = tileHeight + gap;
 
         const draw = () => {
             if (!analyzerRef.current) return;
-            analyzerRef.current.getByteFrequencyData(dataArray);
 
-            // Responsive Canvas
-            const width = canvas.width;
-            const height = canvas.height;
-            ctx.clearRect(0, 0, width, height);
+            if (isPlaying) {
+                analyzerRef.current.getByteFrequencyData(dataArray);
+            }
 
-            // Render Config
-            const barCount = 32; // Fixed number of bars for cleaner look
-            const barWidth = (width / barCount) * 0.8;
-            const barGap = (width / barCount) * 0.2;
+            ctx.clearRect(0, 0, dimensions.width, dimensions.height);
 
-            // Focus on 0-8kHz range (Human voice/Music)
-            // 44.1kHz / 2 = 22kHz nyquist. 128 bins. 
-            // 8kHz is roughly top 37% of bins. ~47 bins.
-            // We'll map the first 50 bins to our 32 bars.
-            const usableBins = 50;
+            // Dynamic Bar Count: Fill the width
+            const barCount = Math.floor(dimensions.width / COL_WIDTH);
+
+            // Sync physics arrays size
+            if (peakPositionsRef.current.length !== barCount) {
+                peakPositionsRef.current = new Array(barCount).fill(0);
+                peakDropsRef.current = new Array(barCount).fill(0);
+            }
+
+            const maxTilesColumn = Math.floor(dimensions.height / TOTAL_ROW_HEIGHT);
+
+            // Hover Logic
+            const hoverColumnIndex = isHovering
+                ? Math.floor(hoverPercent * barCount)
+                : -1;
 
             for (let i = 0; i < barCount; i++) {
-                // Linear interpolation to map bar index to frequency bin
-                const binIndex = Math.floor(i * (usableBins / barCount));
-                const value = dataArray[binIndex];
+                // Map visualization bars to frequency bins (focus on 0-70% of freq range)
+                const binIndex = Math.floor(i * (dataArray.length / barCount) * 0.7);
+                let value = dataArray[binIndex] || 0;
 
-                const x = i * (barWidth + barGap);
+                // Boost visuals
+                value = Math.min(255, value * 1.15);
 
-                // Calculate how many tiles active
-                // Boost the signal slightly as high freqs drop off
-                const boost = 1 + (i / barCount) * 0.5;
-                const normalizedValue = Math.min(255, value * boost);
+                const x = i * COL_WIDTH; // No dynamic spacing, just strict grid
 
-                const maxTiles = Math.floor(height / totalBlockSize);
-                const activeTiles = Math.floor((normalizedValue / 255) * maxTiles);
+                // Calculate Active Tiles
+                const activeTiles = Math.floor((value / 255) * maxTilesColumn);
 
-                for (let j = 0; j < maxTiles; j++) {
-                    const y = height - (j * totalBlockSize) - tileHeight;
+                // Peak Physics
+                if (activeTiles > peakPositionsRef.current[i]) {
+                    peakPositionsRef.current[i] = activeTiles;
+                    peakDropsRef.current[i] = 0;
+                } else {
+                    peakDropsRef.current[i]++;
+                    if (peakDropsRef.current[i] > 5) {
+                        peakPositionsRef.current[i] = Math.max(0, peakPositionsRef.current[i] - 1);
+                        peakDropsRef.current[i] = 0;
+                    }
+                }
+                const peakTile = peakPositionsRef.current[i];
 
-                    // Color Logic
-                    if (j < activeTiles) {
-                        // Active
-                        // Gradient: Bottom (Orange) -> Top (Yellow/White)
-                        if (j > maxTiles * 0.8) {
-                            ctx.fillStyle = "#FFF7ED"; // stone-50, peak
-                        } else if (j > maxTiles * 0.5) {
-                            ctx.fillStyle = "#FF8C00"; // Primary Orange
-                        } else {
-                            ctx.fillStyle = "#C2410C"; // Darker Orange/Rust
+                // Draw Column
+                for (let j = 0; j < maxTilesColumn; j++) {
+                    const y = dimensions.height - (j * TOTAL_ROW_HEIGHT) - TILE_SIZE;
+
+                    // 1. Ghost Grid (Warm Flashlight)
+                    if (i === hoverColumnIndex && isHovering) {
+                        if (j >= activeTiles && j !== peakTile) {
+                            // Use a faint orange instead of white for the ghost
+                            ctx.fillStyle = "rgba(255, 140, 0, 0.15)";
+                            ctx.beginPath();
+                            ctx.roundRect(x, y, TILE_SIZE, TILE_SIZE, 1 * SCALE);
+                            ctx.fill();
                         }
-
-                        // Add Glow to active tiles?
-                        // heavy perf hit on canvas 2d usually. kept simple flat color for now.
-                    } else {
-                        // Passive Grid
-                        ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
                     }
 
-                    ctx.fillRect(x, y, barWidth, tileHeight);
+                    // 2. Active Signal
+                    if (j < activeTiles) {
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.roundRect(x, y, TILE_SIZE, TILE_SIZE, 1 * SCALE);
+                        ctx.fill();
+                    }
+                    // 3. Peak Hold (Luminous Amber)
+                    else if (j === peakTile && peakTile > 0 && isPlaying) {
+                        // Changed from White to Warm Amber
+                        ctx.fillStyle = "#FDE68A"; // Amber-200
+                        ctx.globalAlpha = 0.9;
+                        ctx.beginPath();
+                        ctx.roundRect(x, y, TILE_SIZE, TILE_SIZE, 1 * SCALE);
+                        ctx.fill();
+                        ctx.globalAlpha = 1.0;
+                    }
                 }
             }
 
-            if (isPlaying) {
+            if (isPlaying || peakPositionsRef.current.some(p => p > 0)) {
                 rafRef.current = requestAnimationFrame(draw);
             }
         };
 
-        if (isPlaying) {
-            // Resume context if suspended
-            if (contextRef.current?.state === 'suspended') {
-                contextRef.current.resume();
-            }
-            draw();
-        } else {
-            // Draw one frame of silence or current state, then stop
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            // Optional: clear or dim? keeping last frame looks weird, better clear or animate down.
-            // For now just stop loop.
-        }
+        draw();
 
         return () => {
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
         };
-    }, [isPlaying]);
+    }, [isPlaying, isHovering, hoverPercent, dimensions]);
 
     return (
-        <canvas
-            ref={canvasRef}
-            width={320}
-            height={64}
-            className="w-full h-full mix-blend-screen opacity-90"
-        />
+        <div ref={containerRef} className="w-full h-full">
+            <canvas
+                ref={canvasRef}
+                width={dimensions.width}
+                height={dimensions.height}
+                style={{ width: '100%', height: '100%' }}
+                className="block mix-blend-screen opacity-90"
+            />
+        </div>
     );
 }

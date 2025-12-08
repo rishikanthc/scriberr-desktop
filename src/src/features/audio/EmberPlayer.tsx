@@ -64,6 +64,7 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
 
     // Calculate progress percentage for background gradient
     const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+    const hoverPercent = duration > 0 ? hoverTime / duration : 0;
 
     return (
         <div className={clsx(
@@ -85,7 +86,12 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
 
             {/* Visualizer Layer (Background) */}
             <div className="absolute inset-0 z-0 h-full w-full pointer-events-none opacity-40">
-                <AudioVisualizer audioRef={audioRef} isPlaying={isPlaying} />
+                <AudioVisualizer
+                    audioRef={audioRef}
+                    isPlaying={isPlaying}
+                    isHovering={isHovering}
+                    hoverPercent={hoverPercent}
+                />
             </div>
 
             {/* Controls Layer (Foreground) */}

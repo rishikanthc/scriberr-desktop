@@ -22,10 +22,10 @@
 
   /* Borders: The "Glint" */
   /* Increased to 15% because white blends more into Stone-800 than Stone-900 */
-  --color-glass-border: color-mix(in srgb, white 20%, transparent);
+  --color-glass-border: color-mix(in srgb, white 15%, transparent);
 
   /* Highlight/Hover states */
-  --color-glass-highlight: color-mix(in srgb, white 15%, transparent);
+  --color-glass-highlight: color-mix(in srgb, white 10%, transparent);
 
   /* Brand Accent: Scriberr Orange */
   --color-accent-primary: #FF8C00;

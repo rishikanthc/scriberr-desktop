@@ -11,7 +11,8 @@ use uuid::Uuid;
 pub enum SyncStatus {
     DraftReady,
     Uploading,
-    ProcessingRemote,
+    RemotePending, // Uploaded but not started/queued
+    ProcessingRemote, // Actively processing
     CompletedSynced,
     Failed,
 }
@@ -21,11 +22,13 @@ impl From<String> for SyncStatus {
         match s.as_str() {
             "DRAFT_READY" => SyncStatus::DraftReady,
             "UPLOADING" => SyncStatus::Uploading,
+            "REMOTE_PENDING" => SyncStatus::RemotePending,
             "PROCESSING_REMOTE" => SyncStatus::ProcessingRemote,
             "COMPLETED_SYNCED" => SyncStatus::CompletedSynced,
             "FAILED" => SyncStatus::Failed,
             // Swagger / Remote statuses
-            "uploaded" | "pending" | "processing" => SyncStatus::ProcessingRemote,
+            "uploaded" | "pending" => SyncStatus::RemotePending,
+            "processing" => SyncStatus::ProcessingRemote,
             "completed" => SyncStatus::CompletedSynced,
             "failed" => SyncStatus::Failed,
             _ => SyncStatus::DraftReady, // Default fallback
@@ -38,6 +41,7 @@ impl ToString for SyncStatus {
         match self {
             SyncStatus::DraftReady => "DRAFT_READY".to_string(),
             SyncStatus::Uploading => "UPLOADING".to_string(),
+            SyncStatus::RemotePending => "REMOTE_PENDING".to_string(),
             SyncStatus::ProcessingRemote => "PROCESSING_REMOTE".to_string(),
             SyncStatus::CompletedSynced => "COMPLETED_SYNCED".to_string(),
             SyncStatus::Failed => "FAILED".to_string(),

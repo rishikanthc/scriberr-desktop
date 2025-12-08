@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { FileAudio, Trash2, CloudUpload, CheckCircle, Clock, Calendar, AlertCircle, Loader2, RefreshCw, CloudOff } from 'lucide-react';
+import { FileAudio, Trash2, CloudUpload, CheckCircle, Clock, Calendar, AlertCircle, Loader2, RefreshCw, CloudOff, CircleDashed } from 'lucide-react';
 import { useRecordings, useDeleteRecording, useUploadRecording } from './api/useRecordings';
 import { useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { Tooltip } from '../../components/ui/Tooltip';
 import type { LedgerEntry } from '../../types';
 
 // Inline formatDuration if not exists
@@ -252,59 +253,79 @@ export function RecordingList() {
                                     <div className="flex items-center gap-1">
                                         {/* Status Icons */}
                                         {(isUploading || rec.sync_status === 'UPLOADING') && (
-                                            <div className="p-1.5 rounded-md text-[#FF8C00] animate-pulse" title="Uploading...">
-                                                <CloudUpload size={14} />
-                                            </div>
+                                            <Tooltip content="Uploading...">
+                                                <div className="p-1.5 rounded-md text-[#FF8C00] animate-pulse">
+                                                    <CloudUpload size={14} />
+                                                </div>
+                                            </Tooltip>
+                                        )}
+
+                                        {rec.sync_status === 'REMOTE_PENDING' && (
+                                            <Tooltip content="Pending Transcription">
+                                                <div className="p-1.5 rounded-md text-sky-400">
+                                                    <CircleDashed size={14} />
+                                                </div>
+                                            </Tooltip>
                                         )}
 
                                         {rec.sync_status === 'PROCESSING_REMOTE' && (
-                                            <div className="p-1.5 rounded-md text-amber-200 animate-pulse" title="Processing remotely...">
-                                                <Loader2 size={14} className="animate-spin" />
-                                            </div>
+                                            <Tooltip content="Processing remotely...">
+                                                <div className="p-1.5 rounded-md text-amber-200 animate-pulse">
+                                                    <Loader2 size={14} className="animate-spin" />
+                                                </div>
+                                            </Tooltip>
                                         )}
 
                                         {rec.sync_status === 'COMPLETED_SYNCED' && (
-                                            <div className="p-1.5 rounded-md text-green-400" title="Synced">
-                                                <CheckCircle size={14} />
-                                            </div>
+                                            <Tooltip content="Synced">
+                                                <div className="p-1.5 rounded-md text-green-400">
+                                                    <CheckCircle size={14} />
+                                                </div>
+                                            </Tooltip>
                                         )}
 
                                         {rec.sync_status === 'FAILED' && !isUploading && (
-                                            <div className="p-1.5 rounded-md text-red-400" title="Sync Failed">
-                                                <AlertCircle size={14} />
-                                            </div>
+                                            <Tooltip content="Sync Failed">
+                                                <div className="p-1.5 rounded-md text-red-400">
+                                                    <AlertCircle size={14} />
+                                                </div>
+                                            </Tooltip>
                                         )}
 
                                         {rec.sync_status === 'DRAFT_READY' && !isUploading && (
-                                            <div className="p-1.5 rounded-md text-white/20" title="Not Uploaded (Local Only)">
-                                                <CloudOff size={14} />
-                                            </div>
+                                            <Tooltip content="Not Uploaded (Local Only)">
+                                                <div className="p-1.5 rounded-md text-white/20">
+                                                    <CloudOff size={14} />
+                                                </div>
+                                            </Tooltip>
                                         )}
 
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDeleteId(rec.local_id);
-                                            }}
-                                            disabled={isDeleting}
-                                            className="p-1.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                                            title="Delete"
-                                        >
-                                            {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                                        </button>
-
-                                        {/* Upload Button - ONLY for DRAFT_READY */}
-                                        {rec.sync_status === 'DRAFT_READY' && !isUploading && (
+                                        <Tooltip content="Delete">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    handleUpload(rec.local_id);
+                                                    setDeleteId(rec.local_id);
                                                 }}
-                                                className="p-1.5 rounded-lg text-white/20 hover:text-blue-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
-                                                title="Upload to Scriberr"
+                                                disabled={isDeleting}
+                                                className="p-1.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
                                             >
-                                                <CloudUpload size={14} />
+                                                {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                                             </button>
+                                        </Tooltip>
+
+                                        {/* Upload Button - ONLY for DRAFT_READY */}
+                                        {rec.sync_status === 'DRAFT_READY' && !isUploading && (
+                                            <Tooltip content="Upload to Scriberr">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleUpload(rec.local_id);
+                                                    }}
+                                                    className="p-1.5 rounded-lg text-white/20 hover:text-blue-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
+                                                >
+                                                    <CloudUpload size={14} />
+                                                </button>
+                                            </Tooltip>
                                         )}
                                     </div>
                                 </div>

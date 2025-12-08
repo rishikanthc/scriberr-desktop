@@ -20,12 +20,7 @@ pub struct RemoteJob {
     pub individual_transcripts: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct ListResponse {
-    // Allows for { "jobs": [...] } or { "data": [...] }
-    jobs: Option<Vec<RemoteJob>>,
-    data: Option<Vec<RemoteJob>>,
-}
+
 
 pub struct SyncService {
     db: Arc<DatabaseService>,

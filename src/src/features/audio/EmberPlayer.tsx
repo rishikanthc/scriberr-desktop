@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Play, Pause } from 'lucide-react';
 import clsx from 'clsx';
 import { AudioVisualizer } from './AudioVisualizer';
@@ -16,6 +16,7 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
 
     const [hoverTime, setHoverTime] = useState(0);
     const [isHovering, setIsHovering] = useState(false);
+    const [isDragging, setIsDragging] = useState(false); // New state for dragging
     const progressRef = useRef<HTMLDivElement>(null);
 
     const togglePlay = () => {
@@ -39,15 +40,53 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
         }
     };
 
-    const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const time = parseFloat(e.target.value);
+    // Helper to calculate time from mouse event position
+    const calculateTimeFromEvent = (e: React.MouseEvent | MouseEvent) => {
+        if (!progressRef.current || !duration) return 0;
+        const rect = progressRef.current.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        // Clamp x to be within the bounds of the progress bar
+        x = Math.max(0, Math.min(x, rect.width));
+        return (x / rect.width) * duration;
+    };
+
+    // Handle mouse down on the scrubber to start dragging and seek
+    const handleScrubberMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        setIsDragging(true);
+        const time = calculateTimeFromEvent(e);
         if (audioRef.current) {
             audioRef.current.currentTime = time;
             setCurrentTime(time);
         }
     };
 
-    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    // useEffect to handle global mousemove and mouseup events when dragging
+    useEffect(() => {
+        const handleGlobalMouseMove = (e: MouseEvent) => {
+            if (isDragging && audioRef.current && progressRef.current) {
+                const time = calculateTimeFromEvent(e);
+                audioRef.current.currentTime = time;
+                setCurrentTime(time);
+            }
+        };
+
+        const handleGlobalMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        if (isDragging) {
+            window.addEventListener('mousemove', handleGlobalMouseMove);
+            window.addEventListener('mouseup', handleGlobalMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleGlobalMouseMove);
+            window.removeEventListener('mouseup', handleGlobalMouseUp);
+        };
+    }, [isDragging, duration]); // Re-run if dragging state or duration changes
+
+    // Use handleHoverMove for hover only (tooltip)
+    const handleHoverMove = (e: React.MouseEvent<HTMLDivElement>) => {
         if (!progressRef.current || !duration) return;
         const rect = progressRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -101,14 +140,14 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
                 <div className="flex items-center justify-between">
                     <button
                         onClick={togglePlay}
-                        className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-primary text-white shadow-lg shadow-accent-primary/20 hover:bg-accent-primary/90 hover:scale-105 active:scale-95 transition-all focus:outline-none"
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-primary text-white shadow-lg shadow-accent-primary/20 hover:bg-accent-primary/90 hover:scale-105 active:scale-95 transition-all focus:outline-none cursor-pointer"
                     >
                         {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
                     </button>
 
                     <div className="flex flex-col items-end">
                         <span className="font-mono text-xs font-medium text-accent-primary/80 tabular-nums tracking-wide">
-                            {formatTime(currentTime)} <span className="text-stone-600">/</span> {formatTime(duration)}
+                            {formatTime(currentTime)} <span className="text-white/20">/</span> {formatTime(duration)}
                         </span>
                         <span className="text-[10px] text-stone-500 font-medium uppercase tracking-widest mt-0.5">
                             {isPlaying ? 'Playing' : 'Ready'}
@@ -120,9 +159,10 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
                 <div
                     ref={progressRef}
                     className="relative w-full h-4 flex items-center group cursor-pointer"
-                    onMouseMove={handleMouseMove}
+                    onMouseMove={handleHoverMove} // Use handleHoverMove for tooltip
                     onMouseEnter={() => setIsHovering(true)}
                     onMouseLeave={() => setIsHovering(false)}
+                    onMouseDown={handleScrubberMouseDown} // Handle seeking manually
                 >
                     {/* Tooltip */}
                     <div
@@ -147,19 +187,14 @@ export function EmberPlayer({ src, className }: EmberPlayerProps) {
                         />
                     </div>
 
-                    {/* Range Input (Invisible Hitbox) */}
-                    <input
-                        type="range"
-                        min={0}
-                        max={duration || 100}
-                        value={currentTime}
-                        onChange={handleSeek}
-                        className="absolute w-full h-full opacity-0 cursor-pointer z-20"
-                    />
+                    {/* REMOVED: Range Input (replaced by manual drag/click handling) */}
 
                     {/* Thumb Indicator (Visual only, follows progress) */}
                     <div
-                        className="absolute h-2.5 w-2.5 bg-white rounded-full shadow-sm ml-[-5px] pointer-events-none transition-all duration-100 ease-linear group-hover:scale-125 opacity-0 group-hover:opacity-100"
+                        className={clsx(
+                            "absolute h-2.5 w-2.5 bg-white rounded-full shadow-sm ml-[-5px] pointer-events-none transition-all duration-100 ease-linear",
+                            (isHovering || isDragging) ? "scale-125 opacity-100" : "scale-0 opacity-0"
+                        )}
                         style={{ left: `${progressPercent}%` }}
                     />
                 </div>

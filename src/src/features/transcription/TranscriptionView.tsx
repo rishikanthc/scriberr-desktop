@@ -107,7 +107,7 @@ export function TranscriptionView({ recordingId }: TranscriptionViewProps) {
                             <button
                                 onClick={() => setViewMode('paragraph')}
                                 className={clsx(
-                                    "p-1.5 rounded-full transition-all focus:outline-none",
+                                    "p-1.5 rounded-full transition-all focus:outline-none cursor-pointer",
                                     viewMode === 'paragraph' ? "bg-white/10 text-white shadow-sm" : "text-white/30 hover:text-white/70"
                                 )}
                                 title="Paragraph View"
@@ -118,7 +118,7 @@ export function TranscriptionView({ recordingId }: TranscriptionViewProps) {
                                 onClick={() => setViewMode('segments')}
                                 disabled={segments.length === 0}
                                 className={clsx(
-                                    "p-1.5 rounded-full transition-all focus:outline-none",
+                                    "p-1.5 rounded-full transition-all focus:outline-none cursor-pointer",
                                     viewMode === 'segments' ? "bg-white/10 text-white shadow-sm" : "text-white/30 hover:text-white/70",
                                     segments.length === 0 && "opacity-20 cursor-not-allowed"
                                 )}

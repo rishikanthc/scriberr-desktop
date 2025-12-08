@@ -21,7 +21,11 @@ const getFilename = (path: string | null, title: string) => {
     return title;
 };
 
-export function RecordingList() {
+interface RecordingListProps {
+    onSelect?: (id: string) => void;
+}
+
+export function RecordingList({ onSelect }: RecordingListProps) {
     const { data: recordings = [], isLoading, refetch } = useRecordings();
     const deleteMutation = useDeleteRecording();
     const uploadMutation = useUploadRecording();
@@ -160,14 +164,16 @@ export function RecordingList() {
         return (
             <div className="flex flex-col items-center justify-center p-8 text-white/40 gap-3">
                 <div className="flex gap-2 mb-4">
-                    <button
-                        onClick={handleSync}
-                        disabled={isSyncing}
-                        className="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
-                    >
-                        <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
-                        <span>Sync Now</span>
-                    </button>
+                    <Tooltip content="Sync with Cloud">
+                        <button
+                            onClick={handleSync}
+                            disabled={isSyncing}
+                            className="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+                        >
+                            <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+                            <span>Sync Now</span>
+                        </button>
+                    </Tooltip>
                 </div>
                 <FileAudio size={32} className="opacity-50" />
                 <p>No recordings found</p>
@@ -180,21 +186,15 @@ export function RecordingList() {
             <div className="flex items-center justify-between px-2 mb-2 shrink-0">
                 <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Recordings</span>
                 <div className="flex items-center gap-1">
-                    <button
-                        onClick={handleSync}
-                        disabled={isSyncing}
-                        className="text-white/40 hover:text-white transition-colors p-1"
-                        title="Sync with Cloud"
-                    >
-                        <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
-                    </button>
-                    <button
-                        onClick={() => refetch()}
-                        className="text-white/40 hover:text-white transition-colors p-1"
-                        title="Reload List"
-                    >
-                        <Clock size={12} />
-                    </button>
+                    <Tooltip content="Sync with Cloud">
+                        <button
+                            onClick={handleSync}
+                            disabled={isSyncing}
+                            className="text-white/40 hover:text-white transition-colors p-1"
+                        >
+                            <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+                        </button>
+                    </Tooltip>
                 </div>
             </div>
 
@@ -229,6 +229,7 @@ export function RecordingList() {
                             >
                                 <div
                                     onContextMenu={(e) => handleContextMenu(e, rec.local_id)}
+                                    onClick={() => onSelect?.(rec.local_id)}
                                     className="group flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all cursor-pointer select-none relative h-full"
                                 >
                                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/20 to-blue-500/20 flex items-center justify-center border border-white/10 shrink-0">

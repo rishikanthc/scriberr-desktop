@@ -4,13 +4,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { RecordingList } from '../library/RecordingList';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { RecorderScreen } from '../recorder/RecorderScreen';
+import { TranscriptionView } from '../transcription/TranscriptionView';
 import { TitleBar } from '../shell/TitleBar';
 import clsx from 'clsx';
 
-type View = 'recordings' | 'settings' | 'recorder';
+type View = 'recordings' | 'settings' | 'recorder' | 'transcription';
 
 export function DashboardWindow() {
     const [currentView, setCurrentView] = useState<View>('recordings');
+    const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null);
+
+    const handleRecordingSelect = (id: string) => {
+        setSelectedRecordingId(id);
+        setCurrentView('transcription');
+    };
 
     return (
         <div className="h-screen w-screen bg-glass-base backdrop-blur-xl rounded-2xl border border-glass-border shadow-2xl overflow-hidden flex flex-col text-stone-200 select-none relative font-sans antialiased selection:bg-accent-primary/30">
@@ -28,7 +35,7 @@ export function DashboardWindow() {
                             transition={{ duration: 0.2 }}
                             className="h-full w-full p-6"
                         >
-                            <RecordingList />
+                            <RecordingList onSelect={handleRecordingSelect} />
                         </motion.div>
                     ) : currentView === 'settings' ? (
                         <motion.div
@@ -41,7 +48,7 @@ export function DashboardWindow() {
                         >
                             <SettingsScreen onBack={() => setCurrentView('recordings')} />
                         </motion.div>
-                    ) : (
+                    ) : currentView === 'recorder' ? (
                         <motion.div
                             key="recorder"
                             initial={{ opacity: 0, scale: 0.95 }}
@@ -51,6 +58,17 @@ export function DashboardWindow() {
                             className="h-full w-full"
                         >
                             <RecorderScreen />
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="transcription"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            transition={{ duration: 0.2 }}
+                            className="h-full w-full"
+                        >
+                            {selectedRecordingId && <TranscriptionView recordingId={selectedRecordingId} />}
                         </motion.div>
                     )}
                 </AnimatePresence>

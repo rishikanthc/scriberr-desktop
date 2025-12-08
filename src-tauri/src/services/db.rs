@@ -272,6 +272,27 @@ impl DatabaseService {
 
         let sync_status = SyncStatus::from(status_str.to_string()).to_string();
 
+        // Parse transcript logic
+        let mut db_transcript = transcript.map(|s| s.to_string());
+        let mut db_individual_json = individual_json.map(|s| s.to_string());
+        
+        // If transcript looks like JSON, try to extract text and segments
+        if let Some(t_str) = transcript {
+            // Simple heuristic to avoid parsing plain text if possible, though safe to parse
+            if t_str.trim().starts_with('{') {
+               if let Ok(val) = serde_json::from_str::<serde_json::Value>(t_str) {
+                    if let Some(txt) = val.get("text").and_then(|v| v.as_str()) {
+                        db_transcript = Some(txt.to_string());
+                    }
+                    // If we have segments in the main transcript, use them if individual_json is empty
+                    // or better, preferring the segments aligned with the text
+                    if let Some(segs) = val.get("segments") {
+                        db_individual_json = Some(segs.to_string());
+                    }
+               }
+            }
+        }
+
         if let Some(record) = existing {
             // Update
             sqlx::query!(
@@ -287,9 +308,9 @@ impl DatabaseService {
                 "#,
                 title,
                 sync_status,
-                transcript,
+                db_transcript,
                 summary,
-                individual_json,
+                db_individual_json,
                 remote_audio_url,
                 record.local_id
             )
@@ -318,9 +339,9 @@ impl DatabaseService {
                 0.0, // Duration unknown from list? Or passed?
                 created_at,
                 sync_status,
-                transcript,
+                db_transcript,
                 summary,
-                individual_json,
+                db_individual_json,
                 remote_audio_url,
                 false
             )

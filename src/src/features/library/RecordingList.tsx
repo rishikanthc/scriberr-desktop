@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import clsx from "clsx"; // Ensure you have this installed, or use standard string concatenation
 import {
 	FileAudio,
 	Trash2,
@@ -61,7 +62,7 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 	const rowVirtualizer = useVirtualizer({
 		count: recordings.length,
 		getScrollElement: () => parentRef.current,
-		estimateSize: () => 72, // Row height + gap
+		estimateSize: () => 80, // Increased slightly to account for padding/borders
 		overscan: 5,
 	});
 
@@ -171,8 +172,6 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 		setIsSyncing(true);
 		try {
 			await invoke("sync_now_command");
-			// Optimistic update or wait for event?
-			// sync-completed event calls refetch.
 		} catch (error) {
 			console.error("Sync failed:", error);
 		} finally {
@@ -180,23 +179,36 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 		}
 	};
 
+	// --- Loading State ---
 	if (isLoading) {
 		return (
-			<div className="flex items-center justify-center p-8 text-white/40">
+			<div className="flex items-center justify-center h-full p-8 text-[var(--color-text-muted)]">
 				<Loader2 className="animate-spin" />
 			</div>
 		);
 	}
 
+	// --- Empty State ---
 	if (recordings.length === 0) {
 		return (
-			<div className="flex flex-col items-center justify-center p-8 text-white/40 gap-3">
-				<div className="flex gap-2 mb-4">
+			<div className="flex flex-col items-center justify-center h-full p-8 text-[var(--color-text-muted)] gap-4">
+				<div className="p-4 rounded-full bg-[var(--color-glass-surface)] border border-[var(--color-glass-border)] shadow-xl">
+					<FileAudio size={32} className="opacity-40" />
+				</div>
+				<div className="flex flex-col items-center gap-1">
+					<p className="font-medium text-[var(--color-text-main)]">
+						No recordings found
+					</p>
+					<p className="text-xs text-[var(--color-text-muted)] opacity-60">
+						Sync to fetch from cloud
+					</p>
+				</div>
+				<div className="flex gap-2 mt-2">
 					<Tooltip content="Sync with Cloud">
 						<button
 							onClick={handleSync}
 							disabled={isSyncing}
-							className="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+							className="bg-[var(--color-glass-surface)] hover:bg-[var(--color-glass-highlight)] border border-[var(--color-glass-border)] px-4 py-2 rounded-lg text-xs flex items-center gap-2 transition-all disabled:opacity-50"
 						>
 							<RefreshCw
 								size={12}
@@ -206,24 +218,23 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 						</button>
 					</Tooltip>
 				</div>
-				<FileAudio size={32} className="opacity-50" />
-				<p>No recordings found</p>
 			</div>
 		);
 	}
 
 	return (
 		<div className="flex flex-col h-full overflow-hidden relative">
-			<div className="flex items-center justify-between px-2 mb-2 shrink-0">
-				<span className="text-xs font-medium text-white/60 uppercase tracking-wider">
-					Recordings
+			{/* Header / Stats */}
+			<div className="flex items-center justify-between px-2 mb-3 shrink-0">
+				<span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">
+					Recordings ({recordings.length})
 				</span>
 				<div className="flex items-center gap-1">
 					<Tooltip content="Sync with Cloud">
 						<button
 							onClick={handleSync}
 							disabled={isSyncing}
-							className="text-white/40 hover:text-white transition-colors p-1"
+							className="text-[var(--color-text-muted)] hover:text-white transition-colors p-1.5 rounded-md hover:bg-white/5"
 						>
 							<RefreshCw
 								size={12}
@@ -234,7 +245,11 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 				</div>
 			</div>
 
-			<div ref={parentRef} className="h-full overflow-y-auto pr-2">
+			{/* The List Container */}
+			<div
+				ref={parentRef}
+				className="h-full overflow-y-auto pr-2 scrollbar-hide"
+			>
 				<div
 					style={{
 						height: `${rowVirtualizer.getTotalSize()}px`,
@@ -260,68 +275,79 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 									height: `${virtualRow.size}px`,
 									transform: `translateY(${virtualRow.start}px)`,
 								}}
-								className="pb-2"
+								className="pb-3" // Gap between items
 							>
 								<div
 									onContextMenu={(e) => handleContextMenu(e, rec.local_id)}
 									onClick={() => onSelect?.(rec.local_id)}
-									className="group flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all cursor-pointer select-none relative h-full"
+									className={clsx(
+										// Level 2 Card Style
+										"group flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer select-none relative h-full",
+										"bg-[var(--color-glass-surface)] border border-[var(--color-glass-border)]",
+										"hover:bg-[var(--color-glass-paper)] hover:border-[var(--color-glass-highlight)]",
+										// Top edge highlight for glass effect
+										"shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)]",
+									)}
 								>
-									<div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-										{/* Icon color changed to a neutral grey (zinc-400 or white/60). 
-       It is now "informational" rather than "decorative".
-    */}
-										<FileAudio size={16} className="text-zinc-400" />
+									{/* Icon Container (Surface Approach - Neutral) */}
+									<div className="w-10 h-10 rounded-lg bg-[var(--color-glass-input)] border border-white/5 flex items-center justify-center shrink-0">
+										<FileAudio
+											size={18}
+											className="text-zinc-500 group-hover:text-zinc-400 transition-colors"
+										/>
 									</div>
-									<div className="min-w-0 flex-1">
-										<div className="text-sm font-medium text-white/90 truncate">
+
+									{/* File Details */}
+									<div className="min-w-0 flex-1 flex flex-col justify-center">
+										<div className="text-sm font-medium text-[var(--color-text-main)] truncate">
 											{getFilename(rec.local_file_path, rec.title)}
 										</div>
-										<div className="text-xs text-white/40 flex items-center gap-2 mt-0.5">
-											<div className="flex items-center gap-1">
+										<div className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-3 mt-0.5">
+											<div className="flex items-center gap-1.5 opacity-80">
 												<Calendar size={10} />
 												<span>
 													{new Date(rec.created_at).toLocaleDateString()}
 												</span>
 											</div>
-											<div className="w-0.5 h-0.5 rounded-full bg-white/20" />
-											<div className="flex items-center gap-1">
+											<div className="w-0.5 h-0.5 rounded-full bg-[var(--color-text-disabled)]" />
+											<div className="flex items-center gap-1.5 opacity-80">
 												<Clock size={10} />
 												<span>{formatDuration(rec.duration_sec)}</span>
 											</div>
 										</div>
 									</div>
 
+									{/* Status & Actions Area */}
 									<div className="flex items-center gap-1">
-										{/* Status Icons */}
+										{/* Status Icons - Using Electric Ember & Success Colors */}
 										{(isUploading || rec.sync_status === "UPLOADING") && (
 											<Tooltip content="Uploading...">
-												<div className="p-1.5 rounded-md text-[#FF8C00] animate-pulse">
-													<CloudUpload size={14} />
+												<div className="p-1.5 rounded-md text-[var(--color-accent-text)] animate-pulse">
+													<CloudUpload size={16} />
 												</div>
 											</Tooltip>
 										)}
 
 										{rec.sync_status === "REMOTE_PENDING" && (
 											<Tooltip content="Pending Transcription">
-												<div className="p-1.5 rounded-md text-sky-400">
-													<CircleDashed size={14} />
+												<div className="p-1.5 rounded-md text-sky-400/80">
+													<CircleDashed size={16} />
 												</div>
 											</Tooltip>
 										)}
 
 										{rec.sync_status === "PROCESSING_REMOTE" && (
 											<Tooltip content="Processing remotely...">
-												<div className="p-1.5 rounded-md text-amber-200 animate-pulse">
-													<Loader2 size={14} className="animate-spin" />
+												<div className="p-1.5 rounded-md text-[var(--color-accent-primary)] animate-pulse">
+													<Loader2 size={16} className="animate-spin" />
 												</div>
 											</Tooltip>
 										)}
 
 										{rec.sync_status === "COMPLETED_SYNCED" && (
 											<Tooltip content="Synced">
-												<div className="p-1.5 rounded-md text-green-400">
-													<CheckCircle size={14} />
+												<div className="p-1.5 rounded-md text-emerald-500">
+													<CheckCircle size={16} />
 												</div>
 											</Tooltip>
 										)}
@@ -329,19 +355,20 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 										{rec.sync_status === "FAILED" && !isUploading && (
 											<Tooltip content="Sync Failed">
 												<div className="p-1.5 rounded-md text-red-400">
-													<AlertCircle size={14} />
+													<AlertCircle size={16} />
 												</div>
 											</Tooltip>
 										)}
 
 										{rec.sync_status === "DRAFT_READY" && !isUploading && (
 											<Tooltip content="Not Uploaded (Local Only)">
-												<div className="p-1.5 rounded-md text-white/20">
-													<CloudOff size={14} />
+												<div className="p-1.5 rounded-md text-[var(--color-text-disabled)] opacity-50">
+													<CloudOff size={16} />
 												</div>
 											</Tooltip>
 										)}
 
+										{/* Hover Actions (Ghost) */}
 										<Tooltip content="Delete">
 											<button
 												onClick={(e) => {
@@ -349,7 +376,7 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 													setDeleteId(rec.local_id);
 												}}
 												disabled={isDeleting}
-												className="p-1.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+												className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-red-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50 ml-1"
 											>
 												{isDeleting ? (
 													<Loader2 size={14} className="animate-spin" />
@@ -367,7 +394,7 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 														e.stopPropagation();
 														handleUpload(rec.local_id);
 													}}
-													className="p-1.5 rounded-lg text-white/20 hover:text-blue-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
+													className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-blue-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
 												>
 													<CloudUpload size={14} />
 												</button>
@@ -381,45 +408,46 @@ export function RecordingList({ onSelect }: RecordingListProps) {
 				</div>
 			</div>
 
-			{/* Context Menu */}
+			{/* Context Menu (Overlay Level 3) */}
 			{contextMenu && (
 				<div
-					className="fixed z-50 bg-neutral-800 border border-white/10 rounded-lg shadow-xl py-1 min-w-[120px] backdrop-blur-md"
+					className="fixed z-50 bg-[var(--color-glass-paper)] border border-[var(--color-glass-highlight)] rounded-xl shadow-2xl py-1.5 min-w-[140px] backdrop-blur-xl"
 					style={{ top: contextMenu.y, left: contextMenu.x }}
 					onClick={(e) => e.stopPropagation()}
 				>
 					<button
 						onClick={handleDeleteClick}
-						className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-white/5 flex items-center gap-2 transition-colors"
+						className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-white/5 flex items-center gap-2 transition-colors font-medium"
 					>
 						<Trash2 size={14} />
-						Delete
+						Delete File
 					</button>
 				</div>
 			)}
 
-			{/* Confirmation Dialog */}
+			{/* Confirmation Dialog (Overlay Level 3) */}
 			{deleteId && (
 				<div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
-					<div className="bg-neutral-900 border border-white/10 rounded-xl p-4 w-full shadow-2xl flex flex-col gap-3">
+					<div className="bg-[var(--color-glass-surface)] border border-[var(--color-glass-highlight)] rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4">
 						<div className="text-center">
-							<h3 className="text-white font-medium text-sm">
+							<h3 className="text-[var(--color-text-main)] font-semibold text-sm">
 								Delete Recording?
 							</h3>
-							<p className="text-white/50 text-[10px] mt-1">
-								This action cannot be undone.
+							<p className="text-[var(--color-text-muted)] text-xs mt-1 leading-relaxed">
+								This action cannot be undone. The file will be permanently
+								removed.
 							</p>
 						</div>
-						<div className="flex gap-2 mt-2">
+						<div className="flex gap-3 mt-2">
 							<button
 								onClick={() => setDeleteId(null)}
-								className="flex-1 bg-white/5 hover:bg-white/10 text-white/80 py-2 rounded-lg text-xs font-medium transition-colors"
+								className="flex-1 bg-white/5 hover:bg-white/10 text-[var(--color-text-main)] py-2.5 rounded-lg text-xs font-medium transition-colors border border-transparent"
 							>
 								Cancel
 							</button>
 							<button
 								onClick={confirmDelete}
-								className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 py-2 rounded-lg text-xs font-medium transition-colors"
+								className="flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 py-2.5 rounded-lg text-xs font-medium transition-colors"
 							>
 								Delete
 							</button>

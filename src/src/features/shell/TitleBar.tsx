@@ -29,23 +29,27 @@ export function TitleBar({
 	return (
 		<div
 			data-tauri-drag-region
-			className="h-14 flex items-center justify-between px-5 w-full shrink-0 z-50 relative border-b border-glass-border/30 bg-glass-surface/20"
+			className="h-16 flex items-center justify-between px-6 w-full shrink-0 z-50 relative bg-gradient-to-b from-white/5 to-transparent"
 		>
-			{/* LEFT: Logo Section */}
-			<div className="flex items-center justify-center gap-2 pointer-events-none opacity-90 select-none">
-				<img src={logoIcon} alt="Scriberr" className="h-6 w-6 drop-shadow-md" />
-				<div className="flex flex-col justify-center items-center h-full">
+			{/* LEFT: Logo Section (Brighter, crisp) */}
+			<div className="flex items-center justify-center gap-3 pointer-events-none select-none">
+				<img
+					src={logoIcon}
+					alt="Scriberr"
+					className="h-6 w-6 drop-shadow-[0_0_10px_rgba(255,109,31,0.3)]"
+				/>
+				<div className="flex flex-col justify-center items-center h-full opacity-90">
 					<ScriberrTextLogo
-						color="#ffffff"
-						className="h-4 w-auto pointer-events-none"
+						color="var(--color-text-main)"
+						className="h-3.5 w-auto pointer-events-none"
 					/>
 				</div>
 			</div>
 
-			{/* CENTER: Stealth Navigation (The "Island") */}
-			<nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 bg-black/20 rounded-full p-1 border border-white/5 backdrop-blur-md shadow-inner">
+			{/* CENTER: Stealth Navigation (Level 3 Overlay - The "Island") */}
+			<nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 bg-[var(--color-glass-surface)]/80 rounded-full p-1.5 border border-[var(--color-glass-highlight)] backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
 				<NavTab
-					icon={<Folder size={16} />}
+					icon={<Folder size={18} />}
 					isActive={
 						currentView === "recordings" || currentView === "transcription"
 					}
@@ -53,13 +57,13 @@ export function TitleBar({
 					label="Library"
 				/>
 				<NavTab
-					icon={<Mic size={16} />}
+					icon={<Mic size={18} />}
 					isActive={currentView === "recorder"}
 					onClick={() => onViewChange("recorder")}
 					label="Record"
 				/>
 				<NavTab
-					icon={<Settings size={16} />}
+					icon={<Settings size={18} />}
 					isActive={currentView === "settings"}
 					onClick={() => onViewChange("settings")}
 					label="Settings"
@@ -69,7 +73,7 @@ export function TitleBar({
 			{/* RIGHT: Window Controls */}
 			<button
 				onClick={closeWindow}
-				className="text-white/40 hover:text-white transition-colors p-1.5 rounded-full hover:bg-white/10 cursor-pointer active:scale-95 duration-200"
+				className="text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-white/10 transition-all p-2 rounded-lg active:scale-95 duration-200"
 			>
 				<X size={18} />
 			</button>
@@ -94,43 +98,43 @@ function NavTab({
 		<button
 			onClick={onClick}
 			className={clsx(
-				"relative flex items-center justify-center px-3 py-1.5 rounded-full outline-none select-none cursor-pointer group",
-				"transition-colors duration-300",
+				"relative flex items-center justify-center px-4 py-2 rounded-full outline-none select-none cursor-pointer group",
+				"transition-all duration-300",
 			)}
 		>
-			{/* 1. The Sliding Background Pill (Magic Motion) */}
-			{/* layoutId ensures Framer Motion morphs this div from one button to another */}
+			{/* 1. The Sliding Background Pill */}
 			{isActive && (
 				<motion.div
 					layoutId="nav-pill"
-					className="absolute inset-0 bg-white/10 border border-white/5 rounded-full shadow-[0_1px_8px_rgba(0,0,0,0.2)]"
-					transition={{ type: "spring", stiffness: 300, damping: 30 }}
+					className="absolute inset-0 bg-white/10 border border-white/10 rounded-full shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+					transition={{ type: "spring", stiffness: 350, damping: 25 }}
 				/>
 			)}
 
-			{/* 2. Content Container (Z-Index to sit on top of the pill) */}
+			{/* 2. Content Container */}
 			<div className="relative flex items-center gap-2 z-10">
-				{/* Icon */}
+				{/* Icon: Neutral when inactive, Electric when active */}
 				<div
 					className={clsx(
-						"transition-colors duration-300",
+						"transition-all duration-300",
 						isActive
-							? "text-accent-primary drop-shadow-[0_0_8px_rgba(255,140,0,0.6)]"
-							: "text-stone-500 group-hover:text-stone-300",
+							? "text-[var(--color-accent-text)] drop-shadow-[0_0_12px_var(--color-accent-glow)] scale-105"
+							: "text-[var(--color-text-muted)] group-hover:text-[var(--color-text-main)]",
 					)}
 				>
 					{icon}
 				</div>
 
-				{/* Animated Label Reveal */}
+				{/* Animated Label */}
 				<motion.span
 					initial={false}
 					animate={{
 						width: isActive ? "auto" : 0,
 						opacity: isActive ? 1 : 0,
+						marginLeft: isActive ? 4 : 0,
 					}}
 					transition={{ duration: 0.2, ease: "easeOut" }}
-					className="overflow-hidden whitespace-nowrap text-[11px] font-medium tracking-wide text-stone-100"
+					className="overflow-hidden whitespace-nowrap text-[12px] font-semibold tracking-wide text-[var(--color-text-main)]"
 				>
 					{label}
 				</motion.span>

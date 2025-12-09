@@ -2,47 +2,54 @@
 @import "tailwindcss";
 
 @theme {
-  /* The "Warm Stone" Palette */
+  /* --- The Canvas (Deep Stone) --- */
+  /* Layer 1: App Shell (The darkest background) */
+  --color-glass-base: color-mix(in srgb, var(--color-stone-900) 95%, transparent);
 
-  /* Layer 1: App Shell (User Adjusted) */
-  /* Now Lighter: Stone-800 gives a warm, deep grey/brown canvas */
-  --color-glass-base: color-mix(in srgb, var(--color-stone-800) 95%, transparent);
+  /* Layer 2: Panels/Sidebar (Slightly lighter to sit on top) */
+  --color-glass-surface: color-mix(in srgb, var(--color-stone-800) 80%, transparent);
 
-  /* Layer 2: Panels/Cards (Must be lighter than Layer 1) */
-  /* Shifted from Stone-800 to Stone-700 to float above the new base */
-  --color-glass-surface: color-mix(in srgb, var(--color-stone-700) 90%, transparent);
+  /* Layer 3: Cards/Content Areas (The reading layer) */
+  --color-glass-paper: color-mix(in srgb, var(--color-stone-800) 40%, transparent);
 
-  /* Layer 3: The "Paper" (Reading Zone) */
-  /* Slightly more substantial backing for better readability */
-  --color-glass-paper: color-mix(in srgb, var(--color-stone-900) 85%, transparent);
-
-  /* Layer 4: Inputs/Wells (Recessed) */
-  /* Increased opacity to 30% so the "hole" is visible against the lighter Stone-800 */
+  /* Layer 4: Inputs/Wells (Recessed/Darker) */
   --color-glass-input: color-mix(in srgb, black 60%, transparent);
 
-  /* Borders: The "Glint" */
-  /* Increased to 15% because white blends more into Stone-800 than Stone-900 */
-  --color-glass-border: color-mix(in srgb, white 15%, transparent);
+  /* Borders: The "Glass Edge" */
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  /* Passive Border */
+  --color-glass-highlight: rgba(255, 255, 255, 0.15);
+  /* Hover/Focus Border */
 
-  /* Highlight/Hover states */
-  --color-glass-highlight: color-mix(in srgb, white 10%, transparent);
+  /* --- The Brand (Electric Ember) --- */
+  /* MAIN GRADIENT: Top-to-Bottom (#FFAB40 -> #FF3D00) */
+  --gradient-brand: linear-gradient(180deg, #FFAB40 0%, #FF3D00 100%);
 
+  /* ACCENT COLORS */
+  --color-accent-primary: #FF6D1F;
+  /* Midpoint Orange-Red (Borders/Icons) */
+  --color-accent-hover: #FF3D00;
+  /* Deep Red-Orange (Hover states) */
+  --color-accent-text: #FFAB40;
+  /* Bright Amber (Text highlights) */
 
-  /* Brand Accent: Scriberr Orange */
-  --color-accent-primary: #FF8C00;
-  --color-accent-hover: #FF9F2D;
-  --color-accent-glow: rgba(255, 140, 0, 0.3);
-  --color-surface-tint: color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
+  /* UTILITIES */
+  --color-accent-glow: rgba(255, 61, 0, 0.25);
+  /* Red-Orange Glow */
+  --color-surface-tint: rgba(255, 109, 31, 0.08);
+  /* Very subtle active item bg */
 
   /* Typography */
   --font-display: 'Plus Jakarta Sans', sans-serif;
   --font-body: 'DM Sans', sans-serif;
 
-  /* Text Colors adjusted for the lighter background */
+  /* --- Typography --- */
   --color-text-main: #FAFAF9;
-  --color-text-muted: #D6D3D1;
-  /* Softer reading color for long-form text (approx Stone-300) */
-  --color-text-reading: #d6d3d1;
+  /* Stone-50 */
+  --color-text-muted: #A8A29E;
+  /* Stone-400 */
+  --color-text-disabled: #57534E;
+  /* Stone-600 */
 }
 
 :root {

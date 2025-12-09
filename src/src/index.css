@@ -27,10 +27,12 @@
   /* Highlight/Hover states */
   --color-glass-highlight: color-mix(in srgb, white 10%, transparent);
 
+
   /* Brand Accent: Scriberr Orange */
   --color-accent-primary: #FF8C00;
   --color-accent-hover: #FF9F2D;
   --color-accent-glow: rgba(255, 140, 0, 0.3);
+  --color-surface-tint: color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
 
   /* Typography */
   --font-display: 'Plus Jakarta Sans', sans-serif;

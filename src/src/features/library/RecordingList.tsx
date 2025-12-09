@@ -1,383 +1,432 @@
-import { useState, useEffect, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
-import { FileAudio, Trash2, CloudUpload, CheckCircle, Clock, Calendar, AlertCircle, Loader2, RefreshCw, CloudOff, CircleDashed } from 'lucide-react';
-import { useRecordings, useDeleteRecording, useUploadRecording } from './api/useRecordings';
-import { useQueryClient } from '@tanstack/react-query';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { Tooltip } from '../../components/ui/Tooltip';
-import type { LedgerEntry } from '../../types';
+import { useState, useEffect, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import {
+	FileAudio,
+	Trash2,
+	CloudUpload,
+	CheckCircle,
+	Clock,
+	Calendar,
+	AlertCircle,
+	Loader2,
+	RefreshCw,
+	CloudOff,
+	CircleDashed,
+} from "lucide-react";
+import {
+	useRecordings,
+	useDeleteRecording,
+	useUploadRecording,
+} from "./api/useRecordings";
+import { useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { Tooltip } from "../../components/ui/Tooltip";
+import type { LedgerEntry } from "../../types";
 
 // Inline formatDuration if not exists
 const formatDuration = (seconds?: number) => {
-    if (!seconds) return '00:00';
-    const min = Math.floor(seconds / 60);
-    const sec = Math.floor(seconds % 60);
-    return `${min}:${sec.toString().padStart(2, '0')}`;
+	if (!seconds) return "00:00";
+	const min = Math.floor(seconds / 60);
+	const sec = Math.floor(seconds % 60);
+	return `${min}:${sec.toString().padStart(2, "0")}`;
 };
 
 const getFilename = (path: string | null, title: string) => {
-    if (path) return path.split(/[/\\]/).pop() || title;
-    return title;
+	if (path) return path.split(/[/\\]/).pop() || title;
+	return title;
 };
 
 interface RecordingListProps {
-    onSelect?: (id: string) => void;
+	onSelect?: (id: string) => void;
 }
 
 export function RecordingList({ onSelect }: RecordingListProps) {
-    const { data: recordings = [], isLoading, refetch } = useRecordings();
-    const deleteMutation = useDeleteRecording();
-    const uploadMutation = useUploadRecording();
+	const { data: recordings = [], isLoading, refetch } = useRecordings();
+	const deleteMutation = useDeleteRecording();
+	const uploadMutation = useUploadRecording();
 
-    const [uploadingId, setUploadingId] = useState<string | null>(null);
-    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string } | null>(null);
-    const [deleteId, setDeleteId] = useState<string | null>(null);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const queryClient = useQueryClient();
+	const [uploadingId, setUploadingId] = useState<string | null>(null);
+	const [contextMenu, setContextMenu] = useState<{
+		x: number;
+		y: number;
+		id: string;
+	} | null>(null);
+	const [deleteId, setDeleteId] = useState<string | null>(null);
+	const [isSyncing, setIsSyncing] = useState(false);
+	const queryClient = useQueryClient();
 
-    // Virtualizer setup
-    const parentRef = useRef<HTMLDivElement>(null);
-    const rowVirtualizer = useVirtualizer({
-        count: recordings.length,
-        getScrollElement: () => parentRef.current,
-        estimateSize: () => 72, // Row height + gap
-        overscan: 5,
-    });
+	// Virtualizer setup
+	const parentRef = useRef<HTMLDivElement>(null);
+	const rowVirtualizer = useVirtualizer({
+		count: recordings.length,
+		getScrollElement: () => parentRef.current,
+		estimateSize: () => 72, // Row height + gap
+		overscan: 5,
+	});
 
-    useEffect(() => {
-        const unlistenPromise = listen<LedgerEntry>('recording-added', (event) => {
-            queryClient.setQueryData<LedgerEntry[]>(['recordings'], (old) => {
-                if (!old) return [event.payload];
-                if (old.some(r => r.local_id === event.payload.local_id)) return old;
-                return [event.payload, ...old];
-            });
-        });
+	useEffect(() => {
+		const unlistenPromise = listen<LedgerEntry>("recording-added", (event) => {
+			queryClient.setQueryData<LedgerEntry[]>(["recordings"], (old) => {
+				if (!old) return [event.payload];
+				if (old.some((r) => r.local_id === event.payload.local_id)) return old;
+				return [event.payload, ...old];
+			});
+		});
 
-        const unlistenUpdatedPromise = listen<LedgerEntry>('recording-updated', (event) => {
-            queryClient.setQueryData<LedgerEntry[]>(['recordings'], (old) => {
-                if (!old) return old;
-                return old.map(rec => rec.local_id === event.payload.local_id ? event.payload : rec);
-            });
-        });
+		const unlistenUpdatedPromise = listen<LedgerEntry>(
+			"recording-updated",
+			(event) => {
+				queryClient.setQueryData<LedgerEntry[]>(["recordings"], (old) => {
+					if (!old) return old;
+					return old.map((rec) =>
+						rec.local_id === event.payload.local_id ? event.payload : rec,
+					);
+				});
+			},
+		);
 
-        const unlistenDeletedPromise = listen<string>('recording-deleted-remote', (event) => {
-            queryClient.setQueryData<LedgerEntry[]>(['recordings'], (old) => {
-                if (!old) return old;
-                return old.filter(rec => rec.remote_job_id !== event.payload);
-            });
-        });
+		const unlistenDeletedPromise = listen<string>(
+			"recording-deleted-remote",
+			(event) => {
+				queryClient.setQueryData<LedgerEntry[]>(["recordings"], (old) => {
+					if (!old) return old;
+					return old.filter((rec) => rec.remote_job_id !== event.payload);
+				});
+			},
+		);
 
-        const unlistenSyncPromise = listen<void>('sync-completed', () => {
-            refetch();
-        });
+		const unlistenSyncPromise = listen<void>("sync-completed", () => {
+			refetch();
+		});
 
-        return () => {
-            unlistenPromise.then(unlisten => unlisten());
-            unlistenUpdatedPromise.then(unlisten => unlisten());
-            unlistenDeletedPromise.then(unlisten => unlisten());
-            unlistenSyncPromise.then(unlisten => unlisten());
-        };
-    }, [queryClient, refetch]);
+		return () => {
+			unlistenPromise.then((unlisten) => unlisten());
+			unlistenUpdatedPromise.then((unlisten) => unlisten());
+			unlistenDeletedPromise.then((unlisten) => unlisten());
+			unlistenSyncPromise.then((unlisten) => unlisten());
+		};
+	}, [queryClient, refetch]);
 
-    // Close context menu on global click
-    useEffect(() => {
-        const handleClick = () => setContextMenu(null);
-        window.addEventListener('click', handleClick);
-        return () => window.removeEventListener('click', handleClick);
-    }, []);
+	// Close context menu on global click
+	useEffect(() => {
+		const handleClick = () => setContextMenu(null);
+		window.addEventListener("click", handleClick);
+		return () => window.removeEventListener("click", handleClick);
+	}, []);
 
-    const handleContextMenu = (e: React.MouseEvent, id: string) => {
-        e.preventDefault();
-        e.stopPropagation();
+	const handleContextMenu = (e: React.MouseEvent, id: string) => {
+		e.preventDefault();
+		e.stopPropagation();
 
-        const MENU_WIDTH = 130;
-        const MENU_HEIGHT = 50;
-        const PADDING = 10;
+		const MENU_WIDTH = 130;
+		const MENU_HEIGHT = 50;
+		const PADDING = 10;
 
-        const x = Math.min(e.clientX, window.innerWidth - MENU_WIDTH - PADDING);
-        const y = Math.min(e.clientY, window.innerHeight - MENU_HEIGHT - PADDING);
+		const x = Math.min(e.clientX, window.innerWidth - MENU_WIDTH - PADDING);
+		const y = Math.min(e.clientY, window.innerHeight - MENU_HEIGHT - PADDING);
 
-        setContextMenu({ x, y, id });
-    };
+		setContextMenu({ x, y, id });
+	};
 
-    const handleDeleteClick = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (contextMenu) {
-            setDeleteId(contextMenu.id);
-            setContextMenu(null);
-        }
-    };
+	const handleDeleteClick = (e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (contextMenu) {
+			setDeleteId(contextMenu.id);
+			setContextMenu(null);
+		}
+	};
 
-    const confirmDelete = async () => {
-        if (deleteId) {
-            const rec = recordings.find(r => r.local_id === deleteId);
-            if (!rec) {
-                setDeleteId(null);
-                return;
-            }
+	const confirmDelete = async () => {
+		if (deleteId) {
+			const rec = recordings.find((r) => r.local_id === deleteId);
+			if (!rec) {
+				setDeleteId(null);
+				return;
+			}
 
-            deleteMutation.mutate(rec.local_id, {
-                onSuccess: () => setDeleteId(null),
-                onError: (err) => console.error(err)
-            });
-        }
-    };
+			deleteMutation.mutate(rec.local_id, {
+				onSuccess: () => setDeleteId(null),
+				onError: (err) => console.error(err),
+			});
+		}
+	};
 
-    const handleUpload = async (id: string) => {
-        if (uploadingId) return;
+	const handleUpload = async (id: string) => {
+		if (uploadingId) return;
 
-        setUploadingId(id);
-        uploadMutation.mutate(id, {
-            onSuccess: () => {
-                setUploadingId(null);
-            },
-            onError: () => {
-                setUploadingId(null);
-                refetch();
-            }
-        });
-    };
+		setUploadingId(id);
+		uploadMutation.mutate(id, {
+			onSuccess: () => {
+				setUploadingId(null);
+			},
+			onError: () => {
+				setUploadingId(null);
+				refetch();
+			},
+		});
+	};
 
-    const handleSync = async () => {
-        setIsSyncing(true);
-        try {
-            await invoke('sync_now_command');
-            // Optimistic update or wait for event?
-            // sync-completed event calls refetch.
-        } catch (error) {
-            console.error("Sync failed:", error);
-        } finally {
-            setIsSyncing(false);
-        }
-    };
+	const handleSync = async () => {
+		setIsSyncing(true);
+		try {
+			await invoke("sync_now_command");
+			// Optimistic update or wait for event?
+			// sync-completed event calls refetch.
+		} catch (error) {
+			console.error("Sync failed:", error);
+		} finally {
+			setIsSyncing(false);
+		}
+	};
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center p-8 text-white/40">
-                <Loader2 className="animate-spin" />
-            </div>
-        );
-    }
+	if (isLoading) {
+		return (
+			<div className="flex items-center justify-center p-8 text-white/40">
+				<Loader2 className="animate-spin" />
+			</div>
+		);
+	}
 
-    if (recordings.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center p-8 text-white/40 gap-3">
-                <div className="flex gap-2 mb-4">
-                    <Tooltip content="Sync with Cloud">
-                        <button
-                            onClick={handleSync}
-                            disabled={isSyncing}
-                            className="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
-                        >
-                            <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
-                            <span>Sync Now</span>
-                        </button>
-                    </Tooltip>
-                </div>
-                <FileAudio size={32} className="opacity-50" />
-                <p>No recordings found</p>
-            </div>
-        );
-    }
+	if (recordings.length === 0) {
+		return (
+			<div className="flex flex-col items-center justify-center p-8 text-white/40 gap-3">
+				<div className="flex gap-2 mb-4">
+					<Tooltip content="Sync with Cloud">
+						<button
+							onClick={handleSync}
+							disabled={isSyncing}
+							className="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+						>
+							<RefreshCw
+								size={12}
+								className={isSyncing ? "animate-spin" : ""}
+							/>
+							<span>Sync Now</span>
+						</button>
+					</Tooltip>
+				</div>
+				<FileAudio size={32} className="opacity-50" />
+				<p>No recordings found</p>
+			</div>
+		);
+	}
 
-    return (
-        <div className="flex flex-col h-full overflow-hidden relative">
-            <div className="flex items-center justify-between px-2 mb-2 shrink-0">
-                <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Recordings</span>
-                <div className="flex items-center gap-1">
-                    <Tooltip content="Sync with Cloud">
-                        <button
-                            onClick={handleSync}
-                            disabled={isSyncing}
-                            className="text-white/40 hover:text-white transition-colors p-1"
-                        >
-                            <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
-                        </button>
-                    </Tooltip>
-                </div>
-            </div>
+	return (
+		<div className="flex flex-col h-full overflow-hidden relative">
+			<div className="flex items-center justify-between px-2 mb-2 shrink-0">
+				<span className="text-xs font-medium text-white/60 uppercase tracking-wider">
+					Recordings
+				</span>
+				<div className="flex items-center gap-1">
+					<Tooltip content="Sync with Cloud">
+						<button
+							onClick={handleSync}
+							disabled={isSyncing}
+							className="text-white/40 hover:text-white transition-colors p-1"
+						>
+							<RefreshCw
+								size={12}
+								className={isSyncing ? "animate-spin" : ""}
+							/>
+						</button>
+					</Tooltip>
+				</div>
+			</div>
 
-            <div
-                ref={parentRef}
-                className="h-full overflow-y-auto pr-2"
-            >
-                <div
-                    style={{
-                        height: `${rowVirtualizer.getTotalSize()}px`,
-                        width: '100%',
-                        position: 'relative',
-                    }}
-                >
-                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                        const rec = recordings[virtualRow.index];
-                        const isDeleting = deleteMutation.isPending && deleteMutation.variables === rec.local_id;
-                        const isUploading = uploadingId === rec.local_id;
+			<div ref={parentRef} className="h-full overflow-y-auto pr-2">
+				<div
+					style={{
+						height: `${rowVirtualizer.getTotalSize()}px`,
+						width: "100%",
+						position: "relative",
+					}}
+				>
+					{rowVirtualizer.getVirtualItems().map((virtualRow) => {
+						const rec = recordings[virtualRow.index];
+						const isDeleting =
+							deleteMutation.isPending &&
+							deleteMutation.variables === rec.local_id;
+						const isUploading = uploadingId === rec.local_id;
 
-                        return (
-                            <div
-                                key={rec.local_id}
-                                style={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: '100%',
-                                    height: `${virtualRow.size}px`,
-                                    transform: `translateY(${virtualRow.start}px)`,
-                                }}
-                                className="pb-2"
-                            >
-                                <div
-                                    onContextMenu={(e) => handleContextMenu(e, rec.local_id)}
-                                    onClick={() => onSelect?.(rec.local_id)}
-                                    className="group flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all cursor-pointer select-none relative h-full"
-                                >
-                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/20 to-blue-500/20 flex items-center justify-center border border-white/10 shrink-0">
-                                        <FileAudio size={16} className="text-white/80" />
-                                    </div>
+						return (
+							<div
+								key={rec.local_id}
+								style={{
+									position: "absolute",
+									top: 0,
+									left: 0,
+									width: "100%",
+									height: `${virtualRow.size}px`,
+									transform: `translateY(${virtualRow.start}px)`,
+								}}
+								className="pb-2"
+							>
+								<div
+									onContextMenu={(e) => handleContextMenu(e, rec.local_id)}
+									onClick={() => onSelect?.(rec.local_id)}
+									className="group flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all cursor-pointer select-none relative h-full"
+								>
+									<div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+										{/* Icon color changed to a neutral grey (zinc-400 or white/60). 
+       It is now "informational" rather than "decorative".
+    */}
+										<FileAudio size={16} className="text-zinc-400" />
+									</div>
+									<div className="min-w-0 flex-1">
+										<div className="text-sm font-medium text-white/90 truncate">
+											{getFilename(rec.local_file_path, rec.title)}
+										</div>
+										<div className="text-xs text-white/40 flex items-center gap-2 mt-0.5">
+											<div className="flex items-center gap-1">
+												<Calendar size={10} />
+												<span>
+													{new Date(rec.created_at).toLocaleDateString()}
+												</span>
+											</div>
+											<div className="w-0.5 h-0.5 rounded-full bg-white/20" />
+											<div className="flex items-center gap-1">
+												<Clock size={10} />
+												<span>{formatDuration(rec.duration_sec)}</span>
+											</div>
+										</div>
+									</div>
 
-                                    <div className="min-w-0 flex-1">
-                                        <div className="text-sm font-medium text-white/90 truncate">{getFilename(rec.local_file_path, rec.title)}</div>
-                                        <div className="text-xs text-white/40 flex items-center gap-2 mt-0.5">
-                                            <div className="flex items-center gap-1">
-                                                <Calendar size={10} />
-                                                <span>{new Date(rec.created_at).toLocaleDateString()}</span>
-                                            </div>
-                                            <div className="w-0.5 h-0.5 rounded-full bg-white/20" />
-                                            <div className="flex items-center gap-1">
-                                                <Clock size={10} />
-                                                <span>{formatDuration(rec.duration_sec)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
+									<div className="flex items-center gap-1">
+										{/* Status Icons */}
+										{(isUploading || rec.sync_status === "UPLOADING") && (
+											<Tooltip content="Uploading...">
+												<div className="p-1.5 rounded-md text-[#FF8C00] animate-pulse">
+													<CloudUpload size={14} />
+												</div>
+											</Tooltip>
+										)}
 
-                                    <div className="flex items-center gap-1">
-                                        {/* Status Icons */}
-                                        {(isUploading || rec.sync_status === 'UPLOADING') && (
-                                            <Tooltip content="Uploading...">
-                                                <div className="p-1.5 rounded-md text-[#FF8C00] animate-pulse">
-                                                    <CloudUpload size={14} />
-                                                </div>
-                                            </Tooltip>
-                                        )}
+										{rec.sync_status === "REMOTE_PENDING" && (
+											<Tooltip content="Pending Transcription">
+												<div className="p-1.5 rounded-md text-sky-400">
+													<CircleDashed size={14} />
+												</div>
+											</Tooltip>
+										)}
 
-                                        {rec.sync_status === 'REMOTE_PENDING' && (
-                                            <Tooltip content="Pending Transcription">
-                                                <div className="p-1.5 rounded-md text-sky-400">
-                                                    <CircleDashed size={14} />
-                                                </div>
-                                            </Tooltip>
-                                        )}
+										{rec.sync_status === "PROCESSING_REMOTE" && (
+											<Tooltip content="Processing remotely...">
+												<div className="p-1.5 rounded-md text-amber-200 animate-pulse">
+													<Loader2 size={14} className="animate-spin" />
+												</div>
+											</Tooltip>
+										)}
 
-                                        {rec.sync_status === 'PROCESSING_REMOTE' && (
-                                            <Tooltip content="Processing remotely...">
-                                                <div className="p-1.5 rounded-md text-amber-200 animate-pulse">
-                                                    <Loader2 size={14} className="animate-spin" />
-                                                </div>
-                                            </Tooltip>
-                                        )}
+										{rec.sync_status === "COMPLETED_SYNCED" && (
+											<Tooltip content="Synced">
+												<div className="p-1.5 rounded-md text-green-400">
+													<CheckCircle size={14} />
+												</div>
+											</Tooltip>
+										)}
 
-                                        {rec.sync_status === 'COMPLETED_SYNCED' && (
-                                            <Tooltip content="Synced">
-                                                <div className="p-1.5 rounded-md text-green-400">
-                                                    <CheckCircle size={14} />
-                                                </div>
-                                            </Tooltip>
-                                        )}
+										{rec.sync_status === "FAILED" && !isUploading && (
+											<Tooltip content="Sync Failed">
+												<div className="p-1.5 rounded-md text-red-400">
+													<AlertCircle size={14} />
+												</div>
+											</Tooltip>
+										)}
 
-                                        {rec.sync_status === 'FAILED' && !isUploading && (
-                                            <Tooltip content="Sync Failed">
-                                                <div className="p-1.5 rounded-md text-red-400">
-                                                    <AlertCircle size={14} />
-                                                </div>
-                                            </Tooltip>
-                                        )}
+										{rec.sync_status === "DRAFT_READY" && !isUploading && (
+											<Tooltip content="Not Uploaded (Local Only)">
+												<div className="p-1.5 rounded-md text-white/20">
+													<CloudOff size={14} />
+												</div>
+											</Tooltip>
+										)}
 
-                                        {rec.sync_status === 'DRAFT_READY' && !isUploading && (
-                                            <Tooltip content="Not Uploaded (Local Only)">
-                                                <div className="p-1.5 rounded-md text-white/20">
-                                                    <CloudOff size={14} />
-                                                </div>
-                                            </Tooltip>
-                                        )}
+										<Tooltip content="Delete">
+											<button
+												onClick={(e) => {
+													e.stopPropagation();
+													setDeleteId(rec.local_id);
+												}}
+												disabled={isDeleting}
+												className="p-1.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+											>
+												{isDeleting ? (
+													<Loader2 size={14} className="animate-spin" />
+												) : (
+													<Trash2 size={14} />
+												)}
+											</button>
+										</Tooltip>
 
-                                        <Tooltip content="Delete">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setDeleteId(rec.local_id);
-                                                }}
-                                                disabled={isDeleting}
-                                                className="p-1.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                                            >
-                                                {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                                            </button>
-                                        </Tooltip>
+										{/* Upload Button - ONLY for DRAFT_READY */}
+										{rec.sync_status === "DRAFT_READY" && !isUploading && (
+											<Tooltip content="Upload to Scriberr">
+												<button
+													onClick={(e) => {
+														e.stopPropagation();
+														handleUpload(rec.local_id);
+													}}
+													className="p-1.5 rounded-lg text-white/20 hover:text-blue-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
+												>
+													<CloudUpload size={14} />
+												</button>
+											</Tooltip>
+										)}
+									</div>
+								</div>
+							</div>
+						);
+					})}
+				</div>
+			</div>
 
-                                        {/* Upload Button - ONLY for DRAFT_READY */}
-                                        {rec.sync_status === 'DRAFT_READY' && !isUploading && (
-                                            <Tooltip content="Upload to Scriberr">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleUpload(rec.local_id);
-                                                    }}
-                                                    className="p-1.5 rounded-lg text-white/20 hover:text-blue-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
-                                                >
-                                                    <CloudUpload size={14} />
-                                                </button>
-                                            </Tooltip>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+			{/* Context Menu */}
+			{contextMenu && (
+				<div
+					className="fixed z-50 bg-neutral-800 border border-white/10 rounded-lg shadow-xl py-1 min-w-[120px] backdrop-blur-md"
+					style={{ top: contextMenu.y, left: contextMenu.x }}
+					onClick={(e) => e.stopPropagation()}
+				>
+					<button
+						onClick={handleDeleteClick}
+						className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-white/5 flex items-center gap-2 transition-colors"
+					>
+						<Trash2 size={14} />
+						Delete
+					</button>
+				</div>
+			)}
 
-            {/* Context Menu */}
-            {contextMenu && (
-                <div
-                    className="fixed z-50 bg-neutral-800 border border-white/10 rounded-lg shadow-xl py-1 min-w-[120px] backdrop-blur-md"
-                    style={{ top: contextMenu.y, left: contextMenu.x }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <button
-                        onClick={handleDeleteClick}
-                        className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-white/5 flex items-center gap-2 transition-colors"
-                    >
-                        <Trash2 size={14} />
-                        Delete
-                    </button>
-                </div>
-            )}
-
-            {/* Confirmation Dialog */}
-            {deleteId && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
-                    <div className="bg-neutral-900 border border-white/10 rounded-xl p-4 w-full shadow-2xl flex flex-col gap-3">
-                        <div className="text-center">
-                            <h3 className="text-white font-medium text-sm">Delete Recording?</h3>
-                            <p className="text-white/50 text-[10px] mt-1">This action cannot be undone.</p>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                            <button
-                                onClick={() => setDeleteId(null)}
-                                className="flex-1 bg-white/5 hover:bg-white/10 text-white/80 py-2 rounded-lg text-xs font-medium transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={confirmDelete}
-                                className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 py-2 rounded-lg text-xs font-medium transition-colors"
-                            >
-                                Delete
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+			{/* Confirmation Dialog */}
+			{deleteId && (
+				<div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+					<div className="bg-neutral-900 border border-white/10 rounded-xl p-4 w-full shadow-2xl flex flex-col gap-3">
+						<div className="text-center">
+							<h3 className="text-white font-medium text-sm">
+								Delete Recording?
+							</h3>
+							<p className="text-white/50 text-[10px] mt-1">
+								This action cannot be undone.
+							</p>
+						</div>
+						<div className="flex gap-2 mt-2">
+							<button
+								onClick={() => setDeleteId(null)}
+								className="flex-1 bg-white/5 hover:bg-white/10 text-white/80 py-2 rounded-lg text-xs font-medium transition-colors"
+							>
+								Cancel
+							</button>
+							<button
+								onClick={confirmDelete}
+								className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 py-2 rounded-lg text-xs font-medium transition-colors"
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+		</div>
+	);
 }
